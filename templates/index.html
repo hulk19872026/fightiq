@@ -7,368 +7,308 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { height: 100%; }
   body {
-    font-family: 'Inter', sans-serif;
-    background: #0d0d0d;
-    color: #fff;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0a0a;
+    color: #e8e8e8;
     max-width: 480px;
     margin: 0 auto;
-    min-height: 100vh;
-    padding-bottom: 80px;
+    min-height: 100%;
+    padding-bottom: 90px;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* Header */
+  /* ── Header ── */
   .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 2px solid #c0392b;
-    position: sticky;
-    top: 0;
-    background: #0d0d0d;
-    z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    background: #0a0a0a;
+    border-bottom: 3px solid #d32f2f;
+    position: sticky; top: 0; z-index: 100;
   }
-  .header-icon {
-    font-size: 22px;
-    cursor: pointer;
-    color: #fff;
-    width: 32px;
-    text-align: center;
-  }
-  .header-logo {
-    font-size: 22px;
-    font-weight: 800;
-    font-style: italic;
-    letter-spacing: 1px;
-  }
+  .header-icon { font-size: 24px; cursor: pointer; width: 36px; text-align: center; }
+  .header-logo { font-size: 24px; font-weight: 800; font-style: italic; letter-spacing: 0.5px; }
 
-  /* Event Banner */
+  /* ── Pages ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── Event Banner ── */
   .event-banner {
-    background: linear-gradient(135deg, #1a1a1a 0%, #1f1f1f 100%);
-    margin: 16px;
-    border-radius: 12px;
-    padding: 18px 20px;
-    border: 1px solid #2a2a2a;
+    margin: 14px 16px;
+    background: #161616;
+    border-radius: 14px;
+    padding: 18px;
+    border: 1px solid #252525;
   }
-  .event-title {
-    font-size: 18px;
-    font-weight: 700;
-    margin-bottom: 4px;
-  }
-  .event-subtitle {
-    font-size: 13px;
-    color: #888;
-  }
-  .fight-card {
-    margin-top: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .fight-card-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 14px;
-  }
-  .fight-card-item .label {
-    font-weight: 700;
-    color: #ccc;
-  }
-  .fight-card-item .emoji {
-    font-size: 18px;
-    width: 24px;
-    text-align: center;
-  }
+  .event-title { font-size: 17px; font-weight: 700; }
+  .event-subtitle { font-size: 13px; color: #777; margin-top: 3px; }
+  .fight-card { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .fight-card-item { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .fight-card-item .label { font-weight: 700; }
+  .fight-card-item .emoji { font-size: 16px; width: 22px; text-align: center; }
 
-  /* Fighter Breakdown */
+  /* ── Section card ── */
   .section {
-    margin: 16px;
-    background: linear-gradient(135deg, #1a1a1a 0%, #181818 100%);
-    border-radius: 12px;
-    border: 1px solid #2a2a2a;
+    margin: 14px 16px;
+    background: #161616;
+    border-radius: 14px;
+    border: 1px solid #252525;
     overflow: hidden;
   }
-  .section-header {
-    padding: 18px 20px 0;
-  }
-  .section-title {
-    font-size: 20px;
-    font-weight: 700;
-    margin-bottom: 6px;
-  }
-  .matchup-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 20px;
-    margin-bottom: 12px;
-  }
-  .matchup-names {
-    font-size: 14px;
-    color: #ccc;
-  }
-  .matchup-names strong {
-    color: #fff;
-  }
-  .fighter-avatars {
-    display: flex;
-    gap: -8px;
-  }
-  .fighter-avatar {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid #333;
-    background: #2a2a2a;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    color: #888;
-  }
-  .fighter-avatar:last-child {
-    margin-left: -10px;
-  }
+  .section-header { padding: 18px 18px 8px; }
+  .section-title { font-size: 19px; font-weight: 700; }
 
-  /* Tabs */
+  /* ── Matchup row ── */
+  .matchup-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 18px 14px;
+  }
+  .matchup-names { font-size: 14px; color: #aaa; }
+  .matchup-names strong { color: #fff; }
+  .fighter-avatars { display: flex; }
+  .fighter-avatar {
+    width: 50px; height: 50px; border-radius: 50%;
+    background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
+    border: 2px solid #333;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; overflow: hidden;
+  }
+  .fighter-avatar:last-child { margin-left: -12px; }
+  .fighter-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* ── Tabs ── */
   .tabs {
-    display: flex;
-    padding: 0 20px;
-    gap: 0;
-    margin-bottom: 16px;
+    display: flex; margin: 0 18px 14px; gap: 4px;
+    background: #111; border-radius: 10px; padding: 4px;
   }
   .tab {
-    flex: 1;
-    text-align: center;
-    padding: 10px 0;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    border-radius: 8px;
-    transition: all 0.2s;
-    color: #888;
+    flex: 1; text-align: center; padding: 10px 0;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    border-radius: 8px; transition: all 0.25s; color: #666;
+    user-select: none;
   }
-  .tab.active {
-    background: #c0392b;
-    color: #fff;
-  }
+  .tab:hover { color: #999; }
+  .tab.active { background: #d32f2f; color: #fff; }
 
-  /* Stats Grid */
+  /* ── Tab content ── */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── Stats grid ── */
   .stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    padding: 0 20px 20px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; padding: 0 18px 18px;
   }
   .stat-card {
-    background: #111;
-    border-radius: 10px;
-    padding: 14px;
-    border: 1px solid #222;
+    background: #0e0e0e; border-radius: 10px;
+    padding: 14px; border: 1px solid #1e1e1e;
   }
   .stat-card-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: #999;
-    margin-bottom: 12px;
-    text-align: center;
+    font-size: 11px; font-weight: 700; color: #888;
+    margin-bottom: 12px; text-align: center; text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
+
+  /* ── Bar chart ── */
   .bar-chart-container {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: 20px;
-    height: 100px;
-    padding-top: 8px;
+    display: flex; align-items: flex-end; justify-content: center;
+    gap: 24px; height: 110px; padding-top: 4px;
   }
-  .bar-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-  }
-  .bar-value {
-    font-size: 16px;
-    font-weight: 700;
-  }
-  .bar {
-    width: 40px;
-    border-radius: 4px 4px 0 0;
-    min-height: 10px;
-  }
-  .bar-red { background: linear-gradient(to top, #a00, #e04040); }
-  .bar-yellow { background: linear-gradient(to top, #b8860b, #ffd700); }
-  .bar-label {
-    font-size: 11px;
-    font-weight: 600;
-    margin-top: 4px;
-  }
-  .bar-label.red { color: #e04040; }
-  .bar-label.yellow { color: #ffd700; }
+  .bar-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .bar-value { font-size: 18px; font-weight: 800; }
+  .bar { width: 44px; border-radius: 5px 5px 0 0; }
+  .bar-red { background: linear-gradient(to top, #b71c1c, #ef5350); }
+  .bar-yellow { background: linear-gradient(to top, #f9a825, #ffee58); }
+  .bar-label { font-size: 11px; font-weight: 700; margin-top: 6px; }
+  .bar-label.red { color: #ef5350; }
+  .bar-label.yellow { color: #ffd600; }
 
+  /* ── Radar ── */
   .radar-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 160px;
+    display: flex; align-items: center; justify-content: center;
+    height: 165px;
   }
-  .radar-container canvas {
-    max-height: 150px;
-    max-width: 150px;
+  .radar-container canvas { max-height: 155px; max-width: 155px; }
+
+  /* ── Analysis tab ── */
+  .analysis-content { padding: 0 18px 18px; }
+  .analysis-card {
+    background: #0e0e0e; border-radius: 10px; padding: 16px;
+    border: 1px solid #1e1e1e; margin-bottom: 12px;
+  }
+  .analysis-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 8px; color: #ddd; }
+  .analysis-card p { font-size: 13px; line-height: 1.6; color: #999; }
+  .analysis-tag {
+    display: inline-block; background: #1a1a2e; color: #818cf8;
+    font-size: 11px; font-weight: 600; padding: 4px 10px;
+    border-radius: 20px; margin-right: 6px; margin-top: 8px;
   }
 
-  /* Odds & Picks */
+  /* ── Betting tab ── */
+  .betting-content { padding: 0 18px 18px; }
+  .prop-bet {
+    background: #0e0e0e; border-radius: 10px; padding: 14px;
+    border: 1px solid #1e1e1e; margin-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer; transition: border-color 0.2s;
+  }
+  .prop-bet:hover { border-color: #d32f2f; }
+  .prop-bet.selected { border-color: #d32f2f; background: #1a1015; }
+  .prop-name { font-size: 13px; font-weight: 600; }
+  .prop-odds { font-size: 14px; font-weight: 700; color: #4ade80; }
+
+  /* ── Odds section ── */
   .odds-section {
-    margin: 16px;
-    background: linear-gradient(135deg, #1a1a1a 0%, #181818 100%);
-    border-radius: 12px;
-    border: 1px solid #2a2a2a;
-    padding: 20px;
+    margin: 14px 16px;
+    background: #161616;
+    border-radius: 14px;
+    border: 1px solid #252525;
+    padding: 18px;
   }
-  .odds-title {
-    font-size: 20px;
-    font-weight: 700;
-    margin-bottom: 14px;
-  }
+  .odds-title { font-size: 19px; font-weight: 700; margin-bottom: 14px; }
   .odds-subtitle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #ccc;
-    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 600; color: #bbb; margin-bottom: 12px;
   }
   .odds-bar {
-    display: flex;
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 20px;
-    font-size: 13px;
-    font-weight: 600;
-    border: 1px solid #333;
+    display: flex; border-radius: 10px; overflow: hidden;
+    margin-bottom: 20px; font-size: 13px; font-weight: 600;
+    border: 1px solid #2a2a2a;
   }
   .odds-bar-left {
-    flex: 36;
-    background: #2a2a2a;
-    padding: 12px 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex: 36; background: #1e1e1e; padding: 13px 14px;
+    display: flex; justify-content: space-between; align-items: center;
   }
   .odds-bar-right {
-    flex: 64;
-    background: #1a3a1a;
-    padding: 12px 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex: 64; background: #0f2a0f; padding: 13px 14px;
+    display: flex; justify-content: space-between; align-items: center;
     color: #4ade80;
   }
-  .odds-name { color: #ccc; }
-  .odds-value-red { color: #e04040; }
-  .odds-value-green { color: #4ade80; }
+  .odds-name { color: #bbb; }
+  .odds-value-red { color: #ef5350; }
 
-  .best-bet {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-  .best-bet-icon {
-    font-size: 20px;
-    margin-top: 2px;
-  }
-  .best-bet-text {
-    font-size: 15px;
-    font-weight: 700;
-  }
-  .best-bet-text span {
-    font-weight: 400;
-    color: #ccc;
-  }
-  .risk {
-    font-size: 14px;
-    margin-left: 30px;
-    margin-bottom: 6px;
-  }
-  .risk strong {
-    color: #fbbf24;
-  }
-  .disclaimer {
-    font-size: 12px;
-    color: #666;
-    font-style: italic;
-    margin-left: 30px;
-  }
+  .best-bet { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+  .best-bet-icon { font-size: 20px; }
+  .best-bet-text { font-size: 15px; font-weight: 700; }
+  .best-bet-text span { font-weight: 400; color: #bbb; }
+  .risk { font-size: 14px; margin-left: 30px; margin-bottom: 6px; }
+  .risk strong { color: #fbbf24; }
+  .disclaimer { font-size: 12px; color: #555; font-style: italic; margin-left: 30px; }
 
-  /* Bottom Nav */
+  /* ── Stats Page ── */
+  .page-title { font-size: 22px; font-weight: 800; padding: 20px 18px 6px; }
+  .page-subtitle { font-size: 13px; color: #777; padding: 0 18px 16px; }
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; border-bottom: 1px solid #1a1a1a;
+  }
+  .stat-row-label { font-size: 14px; color: #999; }
+  .stat-row-values { display: flex; gap: 24px; }
+  .stat-row-val { text-align: center; }
+  .stat-row-val .val { font-size: 16px; font-weight: 700; }
+  .stat-row-val .name { font-size: 10px; color: #666; margin-top: 2px; }
+  .stat-row-val.red .val { color: #ef5350; }
+  .stat-row-val.yellow .val { color: #ffd600; }
+
+  /* ── Betting Page ── */
+  .bet-card {
+    margin: 12px 16px; background: #161616; border-radius: 14px;
+    border: 1px solid #252525; padding: 18px;
+  }
+  .bet-card-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .bet-card-sub { font-size: 12px; color: #666; margin-bottom: 14px; }
+  .bet-option {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #0e0e0e; border-radius: 10px; padding: 14px;
+    border: 1px solid #1e1e1e; margin-bottom: 8px;
+    cursor: pointer; transition: all 0.2s; user-select: none;
+  }
+  .bet-option:hover { border-color: #333; }
+  .bet-option.selected { border-color: #4ade80; background: #0a1f0a; }
+  .bet-option .fighter { font-size: 14px; font-weight: 600; }
+  .bet-option .odds { font-size: 14px; font-weight: 700; color: #4ade80; }
+
+  /* ── Chat Page ── */
+  .chat-container {
+    display: flex; flex-direction: column; height: calc(100vh - 145px);
+  }
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .chat-msg {
+    max-width: 80%; padding: 12px 16px; border-radius: 16px;
+    font-size: 14px; line-height: 1.5;
+  }
+  .chat-msg.bot {
+    align-self: flex-start; background: #1a1a1a;
+    border-bottom-left-radius: 4px; color: #ccc;
+  }
+  .chat-msg.user {
+    align-self: flex-end; background: #d32f2f;
+    border-bottom-right-radius: 4px; color: #fff;
+  }
+  .chat-input-row {
+    display: flex; gap: 10px; padding: 12px 16px;
+    background: #111; border-top: 1px solid #222;
+  }
+  .chat-input {
+    flex: 1; background: #1a1a1a; border: 1px solid #2a2a2a;
+    border-radius: 24px; padding: 12px 18px;
+    color: #fff; font-size: 14px; outline: none;
+    font-family: inherit;
+  }
+  .chat-input::placeholder { color: #555; }
+  .chat-input:focus { border-color: #d32f2f; }
+  .chat-send {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #d32f2f; border: none; color: #fff;
+    font-size: 18px; cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .chat-send:hover { background: #b71c1c; }
+
+  /* ── Bottom Nav ── */
   .bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: 480px;
-    background: #111;
-    border-top: 1px solid #2a2a2a;
-    display: flex;
-    align-items: center;
-    padding: 8px 16px;
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px;
+    background: #0f0f0f; border-top: 1px solid #222;
+    display: flex; align-items: center; padding: 6px 12px 10px;
     z-index: 100;
   }
-  .nav-items {
-    display: flex;
-    flex: 1;
-    justify-content: space-around;
-  }
+  .nav-items { display: flex; flex: 1; justify-content: space-around; }
   .nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer;
-    padding: 6px 12px;
-    border-radius: 8px;
-    transition: all 0.2s;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer; padding: 8px 14px; border-radius: 10px;
+    transition: all 0.2s; user-select: none;
   }
-  .nav-item.active .nav-icon { color: #c0392b; }
-  .nav-item.active .nav-label { color: #c0392b; }
-  .nav-icon {
-    font-size: 20px;
-    color: #666;
-  }
-  .nav-label {
-    font-size: 10px;
-    font-weight: 600;
-    color: #666;
-  }
+  .nav-item:active { transform: scale(0.95); }
+  .nav-icon { font-size: 22px; color: #555; transition: color 0.2s; }
+  .nav-label { font-size: 10px; font-weight: 600; color: #555; transition: color 0.2s; }
+  .nav-item.active .nav-icon { color: #d32f2f; }
+  .nav-item.active .nav-label { color: #d32f2f; }
   .mic-btn {
-    width: 48px;
-    height: 48px;
-    background: linear-gradient(135deg, #1a6dff, #3b82f6);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(59,130,246,0.3);
-    margin-left: 8px;
+    width: 50px; height: 50px;
+    background: linear-gradient(135deg, #1565c0, #42a5f5);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(66,165,245,0.35);
+    margin-left: 4px; transition: transform 0.2s;
   }
-
-  /* SVG Icons inline */
-  .icon-svg {
-    width: 22px;
-    height: 22px;
-    fill: currentColor;
+  .mic-btn:active { transform: scale(0.92); }
+  .mic-btn.listening {
+    background: linear-gradient(135deg, #d32f2f, #ef5350);
+    box-shadow: 0 4px 20px rgba(211,47,47,0.4);
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 4px 20px rgba(211,47,47,0.4); }
+    50% { box-shadow: 0 4px 30px rgba(211,47,47,0.7); }
   }
 </style>
 </head>
@@ -381,122 +321,362 @@
   <div class="header-icon">&#128276;</div>
 </div>
 
-<!-- Event Banner -->
-<div class="event-banner">
-  <div class="event-title">&#128293; UFC 300: Oliveira vs Makhachev</div>
-  <div class="event-subtitle">Tonight - Las Vegas</div>
-  <div class="fight-card">
-    <div class="fight-card-item">
-      <span class="emoji">&#129354;</span>
-      <span><span class="label">Main Event:</span> Oliveira vs Makhachev</span>
+<!-- ═══════ FIGHTS PAGE ═══════ -->
+<div class="page active" id="page-fights">
+
+  <div class="event-banner">
+    <div class="event-title">&#128293; UFC 300: Oliveira vs Makhachev</div>
+    <div class="event-subtitle">Tonight &ndash; Las Vegas</div>
+    <div class="fight-card">
+      <div class="fight-card-item">
+        <span class="emoji">&#129354;</span>
+        <span><span class="label">Main Event:</span> Oliveira vs Makhachev</span>
+      </div>
+      <div class="fight-card-item">
+        <span class="emoji">&#129354;</span>
+        <span><span class="label">Main Card:</span> Gaethje vs Holloway</span>
+      </div>
+      <div class="fight-card-item">
+        <span class="emoji">&#129354;</span>
+        <span>Yan vs Figueiredo</span>
+      </div>
     </div>
-    <div class="fight-card-item">
-      <span class="emoji">&#129354;</span>
-      <span><span class="label">Main Card:</span> Gaethje vs Holloway</span>
+  </div>
+
+  <!-- Fighter Breakdown -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Fighter Breakdown</div>
     </div>
-    <div class="fight-card-item">
-      <span class="emoji">&#129354;</span>
-      <span>Yan vs Figueiredo</span>
+    <div class="matchup-row">
+      <div class="matchup-names">
+        <strong>Charles Oliveira</strong> vs <strong>Islam</strong> <span style="color:#555">Makhachev</span>
+      </div>
+      <div class="fighter-avatars">
+        <div class="fighter-avatar">&#129354;</div>
+        <div class="fighter-avatar">&#129354;</div>
+      </div>
+    </div>
+
+    <div class="tabs" id="breakdown-tabs">
+      <div class="tab active" data-tab="stats">Stats</div>
+      <div class="tab" data-tab="analysis">Analysis</div>
+      <div class="tab" data-tab="betting">Betting</div>
+    </div>
+
+    <!-- Stats Tab -->
+    <div class="tab-content active" id="tab-stats">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card-title">Strikes Per Minute</div>
+          <div class="bar-chart-container">
+            <div class="bar-group">
+              <div class="bar-value" style="color:#ef5350">3.6</div>
+              <div class="bar bar-red" style="height:80px"></div>
+              <div class="bar-label red">Oliveira</div>
+            </div>
+            <div class="bar-group">
+              <div class="bar-value" style="color:#ffd600">2.4</div>
+              <div class="bar bar-yellow" style="height:53px"></div>
+              <div class="bar-label yellow">Makhachev</div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-title">Skill Comparison</div>
+          <div class="radar-container">
+            <canvas id="radarChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analysis Tab -->
+    <div class="tab-content" id="tab-analysis">
+      <div class="analysis-content">
+        <div class="analysis-card">
+          <h3>&#127919; Key Matchup Factor</h3>
+          <p>Makhachev's wrestling control vs Oliveira's submission threat off his back. If Oliveira can keep it standing, his volume striking gives him a path to victory.</p>
+          <div><span class="analysis-tag">Wrestling</span><span class="analysis-tag">Grappling</span></div>
+        </div>
+        <div class="analysis-card">
+          <h3>&#128200; Tale of the Tape</h3>
+          <p>Oliveira: 34-9, 6 fight win streak. Elite finishing ability with 33 submissions.<br>
+          Makhachev: 25-1, 14 fight win streak. Dominant control fighter averaging 4.2 takedowns per fight.</p>
+        </div>
+        <div class="analysis-card">
+          <h3>&#128161; AI Prediction</h3>
+          <p>Makhachev by Decision (62% confidence). The wrestling differential is the decisive factor. Oliveira's best chance is a submission in rounds 1-2.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Betting Tab -->
+    <div class="tab-content" id="tab-betting">
+      <div class="betting-content">
+        <div class="prop-bet" onclick="this.classList.toggle('selected')">
+          <span class="prop-name">Fight goes to Decision</span>
+          <span class="prop-odds">+120</span>
+        </div>
+        <div class="prop-bet" onclick="this.classList.toggle('selected')">
+          <span class="prop-name">Makhachev by Submission</span>
+          <span class="prop-odds">+450</span>
+        </div>
+        <div class="prop-bet" onclick="this.classList.toggle('selected')">
+          <span class="prop-name">Over 2.5 Rounds</span>
+          <span class="prop-odds">-150</span>
+        </div>
+        <div class="prop-bet" onclick="this.classList.toggle('selected')">
+          <span class="prop-name">Oliveira by KO/TKO</span>
+          <span class="prop-odds">+550</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Odds & Picks -->
+  <div class="odds-section">
+    <div class="odds-title">Odds &amp; Picks</div>
+    <div class="odds-subtitle">&#127936; Current Odds</div>
+    <div class="odds-bar">
+      <div class="odds-bar-left">
+        <span class="odds-name">Oliveira:</span>
+        <span class="odds-value-red">+175 (36%)</span>
+      </div>
+      <div class="odds-bar-right">
+        <span>Makhachev</span>
+        <span>-210 (68%)</span>
+      </div>
+    </div>
+    <div class="best-bet">
+      <span class="best-bet-icon">&#127919;</span>
+      <div class="best-bet-text">Best Bet: <span>Makhachev by Submission</span></div>
+    </div>
+    <div class="risk">Risk: <strong>Medium</strong></div>
+    <div class="disclaimer">This is not financial advice.</div>
+  </div>
+</div>
+
+<!-- ═══════ STATS PAGE ═══════ -->
+<div class="page" id="page-stats">
+  <div class="page-title">Fighter Stats</div>
+  <div class="page-subtitle">Oliveira vs Makhachev &ndash; Head to Head</div>
+  <div class="section" style="margin-top:0">
+    <div class="stat-row">
+      <div class="stat-row-label">Strikes Per Min</div>
+      <div class="stat-row-values">
+        <div class="stat-row-val red"><div class="val">3.6</div><div class="name">Oliveira</div></div>
+        <div class="stat-row-val yellow"><div class="val">2.4</div><div class="name">Makhachev</div></div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-row-label">Str. Accuracy</div>
+      <div class="stat-row-values">
+        <div class="stat-row-val red"><div class="val">56%</div><div class="name">Oliveira</div></div>
+        <div class="stat-row-val yellow"><div class="val">59%</div><div class="name">Makhachev</div></div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-row-label">Takedowns / 15m</div>
+      <div class="stat-row-values">
+        <div class="stat-row-val red"><div class="val">1.1</div><div class="name">Oliveira</div></div>
+        <div class="stat-row-val yellow"><div class="val">4.2</div><div class="name">Makhachev</div></div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-row-label">TD Defense</div>
+      <div class="stat-row-values">
+        <div class="stat-row-val red"><div class="val">58%</div><div class="name">Oliveira</div></div>
+        <div class="stat-row-val yellow"><div class="val">90%</div><div class="name">Makhachev</div></div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-row-label">Sub Avg / 15m</div>
+      <div class="stat-row-values">
+        <div class="stat-row-val red"><div class="val">2.8</div><div class="name">Oliveira</div></div>
+        <div class="stat-row-val yellow"><div class="val">0.9</div><div class="name">Makhachev</div></div>
+      </div>
+    </div>
+    <div class="stat-row" style="border:none">
+      <div class="stat-row-label">Win Streak</div>
+      <div class="stat-row-values">
+        <div class="stat-row-val red"><div class="val">6</div><div class="name">Oliveira</div></div>
+        <div class="stat-row-val yellow"><div class="val">14</div><div class="name">Makhachev</div></div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Fighter Breakdown -->
-<div class="section">
-  <div class="section-header">
-    <div class="section-title">Fighter Breakdown</div>
-  </div>
-  <div class="matchup-row">
-    <div class="matchup-names">
-      <strong>Charles Oliveira</strong> vs <strong>Islam</strong> <span style="color:#666;">Makhachev</span>
+<!-- ═══════ BETTING PAGE ═══════ -->
+<div class="page" id="page-betting">
+  <div class="page-title">Betting Lines</div>
+  <div class="page-subtitle">UFC 300 &ndash; Main Event</div>
+
+  <div class="bet-card">
+    <div class="bet-card-title">Moneyline</div>
+    <div class="bet-card-sub">Pick the winner</div>
+    <div class="bet-option" onclick="selectBet(this, 'ml')">
+      <span class="fighter">Charles Oliveira</span><span class="odds">+175</span>
     </div>
-    <div class="fighter-avatars">
-      <div class="fighter-avatar">&#129354;</div>
-      <div class="fighter-avatar">&#129354;</div>
+    <div class="bet-option" onclick="selectBet(this, 'ml')">
+      <span class="fighter">Islam Makhachev</span><span class="odds">-210</span>
     </div>
   </div>
 
-  <!-- Tabs -->
-  <div class="tabs">
-    <div class="tab active" onclick="switchTab(this)">Stats</div>
-    <div class="tab" onclick="switchTab(this)">Analysis</div>
-    <div class="tab" onclick="switchTab(this)">Betting</div>
+  <div class="bet-card">
+    <div class="bet-card-title">Method of Victory</div>
+    <div class="bet-card-sub">How will the fight end?</div>
+    <div class="bet-option" onclick="selectBet(this, 'mov')">
+      <span class="fighter">Makhachev by Decision</span><span class="odds">+110</span>
+    </div>
+    <div class="bet-option" onclick="selectBet(this, 'mov')">
+      <span class="fighter">Makhachev by Submission</span><span class="odds">+450</span>
+    </div>
+    <div class="bet-option" onclick="selectBet(this, 'mov')">
+      <span class="fighter">Oliveira by KO/TKO</span><span class="odds">+550</span>
+    </div>
+    <div class="bet-option" onclick="selectBet(this, 'mov')">
+      <span class="fighter">Oliveira by Submission</span><span class="odds">+600</span>
+    </div>
   </div>
 
-  <!-- Stats Content -->
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-card-title">Strikes Per Minute</div>
-      <div class="bar-chart-container">
-        <div class="bar-group">
-          <div class="bar-value" style="color:#e04040;">3.6</div>
-          <div class="bar bar-red" style="height:75px;"></div>
-          <div class="bar-label red">Oliveira</div>
-        </div>
-        <div class="bar-group">
-          <div class="bar-value" style="color:#ffd700;">2.4</div>
-          <div class="bar bar-yellow" style="height:50px;"></div>
-          <div class="bar-label yellow">Makhachev</div>
-        </div>
-      </div>
+  <div class="bet-card">
+    <div class="bet-card-title">Round Props</div>
+    <div class="bet-card-sub">Total rounds</div>
+    <div class="bet-option" onclick="selectBet(this, 'rounds')">
+      <span class="fighter">Over 2.5 Rounds</span><span class="odds">-150</span>
     </div>
-    <div class="stat-card">
-      <div class="stat-card-title">Skill Comparison</div>
-      <div class="radar-container">
-        <canvas id="radarChart"></canvas>
-      </div>
+    <div class="bet-option" onclick="selectBet(this, 'rounds')">
+      <span class="fighter">Under 2.5 Rounds</span><span class="odds">+120</span>
     </div>
   </div>
 </div>
 
-<!-- Odds & Picks -->
-<div class="odds-section">
-  <div class="odds-title">Odds & Picks</div>
-  <div class="odds-subtitle">&#127936; Current Odds</div>
-  <div class="odds-bar">
-    <div class="odds-bar-left">
-      <span class="odds-name">Oliveira:</span>
-      <span class="odds-value-red">+175 (36%)</span>
+<!-- ═══════ CHAT PAGE ═══════ -->
+<div class="page" id="page-chat">
+  <div class="chat-container">
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-msg bot">Hey! I'm FightIQ AI. Ask me anything about UFC 300, fighter stats, or betting analysis. &#129354;</div>
     </div>
-    <div class="odds-bar-right">
-      <span>Makhachev</span>
-      <span>-210 (68%)</span>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chatInput" type="text" placeholder="Ask about the fight..." autocomplete="off">
+      <button class="chat-send" id="chatSend">&#10148;</button>
     </div>
   </div>
-  <div class="best-bet">
-    <span class="best-bet-icon">&#127919;</span>
-    <div class="best-bet-text">Best Bet: <span>Makhachev by Submission</span></div>
-  </div>
-  <div class="risk">Risk: <strong>Medium</strong></div>
-  <div class="disclaimer">This is not financial advice.</div>
 </div>
 
 <!-- Bottom Nav -->
 <div class="bottom-nav">
   <div class="nav-items">
-    <div class="nav-item active">
+    <div class="nav-item active" data-page="fights">
       <div class="nav-icon">&#129354;</div>
       <div class="nav-label">Fights</div>
     </div>
-    <div class="nav-item">
+    <div class="nav-item" data-page="stats">
       <div class="nav-icon">&#128202;</div>
       <div class="nav-label">Stats</div>
     </div>
-    <div class="nav-item">
+    <div class="nav-item" data-page="betting">
       <div class="nav-icon">&#127942;</div>
       <div class="nav-label">Betting</div>
     </div>
-    <div class="nav-item">
+    <div class="nav-item" data-page="chat">
       <div class="nav-icon">&#128172;</div>
       <div class="nav-label">Chat</div>
     </div>
   </div>
-  <div class="mic-btn">&#127908;</div>
+  <div class="mic-btn" id="micBtn">&#127908;</div>
 </div>
 
 <script>
-// Radar Chart
-const ctx = document.getElementById('radarChart').getContext('2d');
+/* ── Tab switching ── */
+document.getElementById('breakdown-tabs').addEventListener('click', function(e) {
+  var tab = e.target.closest('.tab');
+  if (!tab) return;
+  this.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  tab.classList.add('active');
+  var name = tab.getAttribute('data-tab');
+  document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+  document.getElementById('tab-' + name).classList.add('active');
+});
+
+/* ── Page navigation ── */
+document.querySelectorAll('.nav-item').forEach(function(item) {
+  item.addEventListener('click', function() {
+    document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+    this.classList.add('active');
+    var page = this.getAttribute('data-page');
+    document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+    document.getElementById('page-' + page).classList.add('active');
+  });
+});
+
+/* ── Betting selection ── */
+function selectBet(el, group) {
+  el.parentElement.querySelectorAll('.bet-option').forEach(function(o) { o.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+/* ── Chat ── */
+var chatResponses = {
+  'oliveira': 'Charles "Do Bronx" Oliveira has a 34-9 record with 33 submission wins. He has incredible finishing ability and a dangerous guard game. His striking volume (3.6 SLpM) is elite.',
+  'makhachev': 'Islam Makhachev is 25-1 with a 14-fight win streak. He averages 4.2 takedowns per 15 min and has 90% takedown defense. His sambo-based grappling is suffocating.',
+  'odds': 'Current odds: Makhachev -210 (68% implied) / Oliveira +175 (36% implied). The best value bet is Makhachev by Submission at +450.',
+  'prediction': 'FightIQ AI predicts Makhachev by Decision (62% confidence). His wrestling control should neutralize Oliveira\'s striking, but watch for submission attempts in rounds 1-2.',
+  'default': 'That\'s a great question! For UFC 300, the main event features Oliveira vs Makhachev. Try asking about either fighter, the odds, or my prediction!'
+};
+
+function addMessage(text, type) {
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + type;
+  div.textContent = text;
+  var container = document.getElementById('chatMessages');
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function getReply(msg) {
+  var lower = msg.toLowerCase();
+  if (lower.indexOf('oliveira') !== -1 || lower.indexOf('charles') !== -1) return chatResponses.oliveira;
+  if (lower.indexOf('makhachev') !== -1 || lower.indexOf('islam') !== -1) return chatResponses.makhachev;
+  if (lower.indexOf('odds') !== -1 || lower.indexOf('bet') !== -1 || lower.indexOf('money') !== -1) return chatResponses.odds;
+  if (lower.indexOf('predict') !== -1 || lower.indexOf('who') !== -1 || lower.indexOf('win') !== -1) return chatResponses.prediction;
+  return chatResponses['default'];
+}
+
+function sendChat() {
+  var input = document.getElementById('chatInput');
+  var msg = input.value.trim();
+  if (!msg) return;
+  addMessage(msg, 'user');
+  input.value = '';
+  setTimeout(function() { addMessage(getReply(msg), 'bot'); }, 600);
+}
+
+document.getElementById('chatSend').addEventListener('click', sendChat);
+document.getElementById('chatInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') sendChat();
+});
+
+/* ── Mic button ── */
+document.getElementById('micBtn').addEventListener('click', function() {
+  this.classList.toggle('listening');
+  if (this.classList.contains('listening')) {
+    var self = this;
+    setTimeout(function() {
+      self.classList.remove('listening');
+      document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+      document.querySelector('[data-page="chat"]').classList.add('active');
+      document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+      document.getElementById('page-chat').classList.add('active');
+      addMessage('Who will win the main event?', 'user');
+      setTimeout(function() { addMessage(chatResponses.prediction, 'bot'); }, 600);
+    }, 2000);
+  }
+});
+
+/* ── Radar Chart ── */
+var ctx = document.getElementById('radarChart').getContext('2d');
 new Chart(ctx, {
   type: 'radar',
   data: {
@@ -505,20 +685,20 @@ new Chart(ctx, {
       {
         label: 'Oliveira',
         data: [78, 60, 95, 85, 65],
-        borderColor: '#e04040',
-        backgroundColor: 'rgba(224, 64, 64, 0.15)',
+        borderColor: '#ef5350',
+        backgroundColor: 'rgba(239,83,80,0.12)',
         borderWidth: 2,
         pointRadius: 3,
-        pointBackgroundColor: '#e04040',
+        pointBackgroundColor: '#ef5350'
       },
       {
         label: 'Makhachev',
         data: [72, 95, 75, 80, 82],
-        borderColor: '#ffd700',
-        backgroundColor: 'rgba(255, 215, 0, 0.1)',
+        borderColor: '#ffd600',
+        backgroundColor: 'rgba(255,214,0,0.08)',
         borderWidth: 2,
         pointRadius: 3,
-        pointBackgroundColor: '#ffd700',
+        pointBackgroundColor: '#ffd600'
       }
     ]
   },
@@ -527,28 +707,16 @@ new Chart(ctx, {
     maintainAspectRatio: false,
     scales: {
       r: {
-        beginAtZero: true,
-        max: 100,
+        beginAtZero: true, max: 100,
         ticks: { display: false, stepSize: 20 },
-        grid: { color: '#333' },
-        angleLines: { color: '#333' },
-        pointLabels: {
-          color: '#999',
-          font: { size: 9, weight: '600' }
-        }
+        grid: { color: '#222' },
+        angleLines: { color: '#222' },
+        pointLabels: { color: '#888', font: { size: 9, weight: '600' } }
       }
     },
-    plugins: {
-      legend: { display: false }
-    }
+    plugins: { legend: { display: false } }
   }
 });
-
-// Tab switching
-function switchTab(el) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-}
 </script>
 </body>
 </html>
