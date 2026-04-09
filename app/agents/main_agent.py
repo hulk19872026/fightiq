@@ -264,9 +264,22 @@ def _format_deep_analysis(a: dict, b: dict, prediction: dict, betting_data: dict
     return "\n".join(lines)
 
 
-# ── Fight Pairs for Card-Wide Analysis ──
+# ── Dynamic Fight Card for Analysis ──
 
-CARD_FIGHTS = [
+async def _get_card_fights() -> list[tuple[str, str]]:
+    """Get fight pairs from the live event data."""
+    events = await fetch_events()
+    pairs = []
+    for ev in events:
+        for f in ev.get("fights", []):
+            a = f.get("fighter_a", "")
+            b = f.get("fighter_b", "")
+            if a and b:
+                pairs.append((a, b))
+    return pairs if pairs else FALLBACK_CARD_FIGHTS
+
+
+FALLBACK_CARD_FIGHTS = [
     ("Jiri Prochazka", "Carlos Ulberg"),
     ("Azamat Murzakanov", "Paulo Costa"),
     ("Curtis Blaydes", "Josh Hokit"),
@@ -280,10 +293,11 @@ CARD_FIGHTS = [
 
 async def _analyze_all_fights(db: AsyncSession) -> list[dict]:
     """Run analysis on all fights on the card."""
+    card_fights = await _get_card_fights()
     all_odds = await fetch_odds()
     results = []
 
-    for fa_name, fb_name in CARD_FIGHTS:
+    for fa_name, fb_name in card_fights:
         a = await get_fighter_stats(fa_name, db)
         b = await get_fighter_stats(fb_name, db)
         if not a or not b:
