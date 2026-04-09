@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+*.db
+.env
+node_modules/
+frontend/dist/
+static/
+.vite/
