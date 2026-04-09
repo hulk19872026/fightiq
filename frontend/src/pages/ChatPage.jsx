@@ -3,7 +3,7 @@ import { sendChat } from '../api/client'
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([
-    { role: 'bot', text: 'Hey! I\'m FightIQ AI. Ask me anything about UFC 300, fighter stats, or betting analysis. 🥊' },
+    { role: 'bot', text: 'Hey! I\'m FightIQ AI. Ask me anything about UFC 327, fighter stats, or betting analysis. 🥊' },
   ])
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)

@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { fetchOdds, fetchAnalysis } from '../api/client'
 
 const FIGHTS = [
-  ['Charles Oliveira', 'Islam Makhachev'],
-  ['Justin Gaethje', 'Max Holloway'],
-  ['Petr Yan', 'Deiveson Figueiredo'],
-  ['Alex Pereira', 'Jamahal Hill'],
+  ['Jiri Prochazka', 'Carlos Ulberg'],
+  ['Azamat Murzakanov', 'Paulo Costa'],
+  ['Curtis Blaydes', 'Josh Hokit'],
+  ['Dominick Reyes', 'Johnny Walker'],
+  ['Patricio Pitbull', 'Aaron Pico'],
 ]
 
 export default function BettingPage() {
@@ -37,7 +38,7 @@ export default function BettingPage() {
   return (
     <div>
       <h1 className="text-[22px] font-extrabold px-4 pt-5 pb-1">Betting Lines</h1>
-      <p className="text-[13px] text-gray-500 px-4 pb-4">UFC 300 – Best Picks</p>
+      <p className="text-[13px] text-gray-500 px-4 pb-4">UFC 327 – Best Picks</p>
 
       {/* AI Best Bets */}
       {analyses.length > 0 && (

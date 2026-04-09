@@ -7,16 +7,21 @@ export default function FightsPage({ onSelectFight }) {
   const [events, setEvents] = useState([])
   const [odds, setOdds] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     Promise.all([fetchEvents(), fetchOdds()])
       .then(([ev, od]) => { setEvents(ev); setOdds(od) })
-      .catch(() => {})
+      .catch((e) => { setError(e.message || 'Failed to load'); console.error(e) })
       .finally(() => setLoading(false))
   }, [])
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-brand-red border-t-transparent rounded-full animate-spin" /></div>
+  }
+
+  if (error) {
+    return <div className="p-6 text-center text-gray-500">Failed to load events. Pull to refresh.</div>
   }
 
   return (
