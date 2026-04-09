@@ -64,17 +64,24 @@ def _parse_espn(soup: BeautifulSoup) -> list[dict]:
     links = soup.select("a")
     for link in links:
         text = link.get_text(strip=True)
-        if " vs " in text or " vs. " in text:
+        if (" vs " in text or " vs. " in text) and len(text) < 80:
             parts = text.replace(" vs. ", " vs ").split(" vs ")
             if len(parts) == 2:
-                event["fights"].append({
-                    "fighter_a": parts[0].strip(),
-                    "fighter_b": parts[1].strip(),
-                    "weight_class": "",
-                    "is_main_event": len(event["fights"]) == 0,
-                })
+                a_name = parts[0].strip()
+                b_name = parts[1].strip()
+                # Validate: names should be short, contain only letters/spaces/hyphens
+                if (2 < len(a_name) < 40 and 2 < len(b_name) < 40
+                        and all(c.isalpha() or c in " -'." for c in a_name)
+                        and all(c.isalpha() or c in " -'." for c in b_name)):
+                    event["fights"].append({
+                        "fighter_a": a_name,
+                        "fighter_b": b_name,
+                        "weight_class": "",
+                        "is_main_event": len(event["fights"]) == 0,
+                    })
 
-    if event["fights"]:
+    # Only return if we got reasonable fight data
+    if len(event["fights"]) >= 3:
         if not event["name"]:
             event["name"] = "Upcoming UFC Event"
         events.append(event)
