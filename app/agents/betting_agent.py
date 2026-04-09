@@ -10,7 +10,6 @@ def analyze_betting(fighter_a: dict, fighter_b: dict, odds: dict | None, predict
     confidence = prediction["confidence"]
     method = prediction["method"]
 
-    # Determine odds
     if odds:
         a_odds = odds.get("fighter_a_odds", 0)
         b_odds = odds.get("fighter_b_odds", 0)
@@ -20,7 +19,6 @@ def analyze_betting(fighter_a: dict, fighter_b: dict, odds: dict | None, predict
         a_odds, b_odds = 100, -120
         a_prob, b_prob = 50, 55
 
-    # Check for value
     model_winner_prob = confidence
     if winner == a_name:
         market_prob = a_prob
@@ -41,10 +39,9 @@ def analyze_betting(fighter_a: dict, fighter_b: dict, odds: dict | None, predict
             "reasoning": f"Model gives {winner} {model_winner_prob}% vs market {market_prob}%",
         })
 
-    # Method of victory bet
     if "Submission" in method and confidence > 55:
         best_bets.append({
-            "bet": f"{winner} by {method}",
+            "bet": f"{winner} by Submission",
             "odds": "+450",
             "edge": "Value",
             "risk": "High",
@@ -52,14 +49,13 @@ def analyze_betting(fighter_a: dict, fighter_b: dict, odds: dict | None, predict
         })
     elif "KO" in method and confidence > 55:
         best_bets.append({
-            "bet": f"{winner} by {method}",
+            "bet": f"{winner} by KO/TKO",
             "odds": "+350",
             "edge": "Value",
             "risk": "High",
             "reasoning": f"{winner}'s striking power is the key differentiator",
         })
 
-    # Round prop
     grappler = fighter_a["takedowns_avg"] > 3 or fighter_b["takedowns_avg"] > 3
     if grappler and "Decision" in method:
         best_bets.append({
@@ -89,3 +85,72 @@ def analyze_betting(fighter_a: dict, fighter_b: dict, odds: dict | None, predict
             "fighter_b": {"name": b_name, "odds": b_odds, "implied_prob": b_prob},
         },
     }
+
+
+def build_parlay(picks: list[dict], num_legs: int = 3) -> dict:
+    """Build a parlay from a list of analyzed fight picks, sorted by confidence."""
+    # Sort by confidence (highest first)
+    sorted_picks = sorted(picks, key=lambda p: p["confidence"], reverse=True)
+
+    legs = []
+    parlay_prob = 1.0
+    combined_american = 100
+
+    for pick in sorted_picks[:num_legs]:
+        winner = pick["predicted_winner"]
+        conf = pick["confidence"]
+        method = pick["method"]
+        odds_val = pick.get("winner_odds", -150)
+
+        leg = {
+            "fighter": winner,
+            "method": method,
+            "confidence": conf,
+            "odds": f"{'+' if odds_val > 0 else ''}{odds_val}",
+            "reasoning": pick.get("reasoning", ""),
+        }
+        legs.append(leg)
+
+        implied = american_to_implied(odds_val) / 100.0
+        parlay_prob *= implied
+
+    # Calculate parlay odds from combined probability
+    if parlay_prob > 0 and parlay_prob < 1:
+        if parlay_prob > 0.5:
+            combined_american = -round(parlay_prob / (1 - parlay_prob) * 100)
+        else:
+            combined_american = round((1 - parlay_prob) / parlay_prob * 100)
+
+    # Risk assessment
+    if parlay_prob > 0.35:
+        risk = "Medium"
+    elif parlay_prob > 0.20:
+        risk = "High"
+    else:
+        risk = "Very High"
+
+    payout_100 = round(100 * (1 / parlay_prob - 1)) if parlay_prob > 0 else 0
+
+    return {
+        "type": "parlay",
+        "legs": legs,
+        "num_legs": len(legs),
+        "combined_odds": f"{'+' if combined_american > 0 else ''}{combined_american}",
+        "implied_probability": f"{round(parlay_prob * 100)}%",
+        "payout_per_100": f"${payout_100}",
+        "risk": risk,
+    }
+
+
+def build_best_bets_card(all_analyses: list[dict]) -> list[dict]:
+    """Build a ranked list of the best individual bets across all fights."""
+    bets = []
+    for analysis in all_analyses:
+        for bet in analysis.get("all_bets", []):
+            bet_entry = {**bet, "fight": f"{analysis['fighter_a']} vs {analysis['fighter_b']}"}
+            bets.append(bet_entry)
+
+    # Sort: Low risk first, then by edge
+    risk_order = {"Low": 0, "Medium": 1, "High": 2}
+    bets.sort(key=lambda b: (risk_order.get(b["risk"], 3), b.get("edge", "")))
+    return bets

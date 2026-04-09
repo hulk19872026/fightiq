@@ -3,7 +3,7 @@ import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.stats_agent import get_fighter_stats, compare_fighters
 from app.agents.research_agent import analyze_matchup
-from app.agents.betting_agent import analyze_betting
+from app.agents.betting_agent import analyze_betting, build_parlay, build_best_bets_card
 from app.services.odds_api import fetch_odds
 from app.services.espn import fetch_events
 from app.services.search import search_fighter_stats, search_fight_info
@@ -16,9 +16,20 @@ INTENT_KEYWORDS = {
         "break down", "breakdown", "break this", "analyze", "analysis",
         "deep dive", "who wins and why", "full breakdown", "matchup analysis",
     ],
+    "parlay": [
+        "parlay", "multi", "accumulator", "acca", "combo bet",
+        "3 leg", "4 leg", "5 leg", "2 leg", "leg parlay",
+    ],
+    "build_bet": [
+        "make me a bet", "make a bet", "build a bet", "give me a bet",
+        "build me a", "make me a", "best parlay", "safest bet",
+        "lock of the night", "locks", "sure thing", "gimme a pick",
+        "what should i bet", "what to bet", "best bets tonight",
+        "best bets", "top picks", "tonight's picks", "who do i bet on",
+    ],
     "betting": [
         "odds", "bet", "bets", "betting", "money", "wager", "pick", "picks",
-        "value", "line", "lines", "parlay", "prop", "moneyline", "spread",
+        "value", "line", "lines", "prop", "moneyline", "spread",
         "over under", "best bet",
     ],
     "prediction": [
@@ -48,6 +59,16 @@ def classify_intent(message: str) -> str:
     for kw in INTENT_KEYWORDS["deep_analysis"]:
         if kw in msg:
             return "deep_analysis"
+
+    # Parlay requests
+    for kw in INTENT_KEYWORDS["parlay"]:
+        if kw in msg:
+            return "parlay"
+
+    # "Make me a bet" / "best bets tonight"
+    for kw in INTENT_KEYWORDS["build_bet"]:
+        if kw in msg:
+            return "build_bet"
 
     # Then check other intents by specificity
     for intent in ["betting", "prediction", "stats", "fights", "live"]:
@@ -243,6 +264,125 @@ def _format_deep_analysis(a: dict, b: dict, prediction: dict, betting_data: dict
     return "\n".join(lines)
 
 
+# ── Fight Pairs for Card-Wide Analysis ──
+
+CARD_FIGHTS = [
+    ("Jiri Prochazka", "Carlos Ulberg"),
+    ("Azamat Murzakanov", "Paulo Costa"),
+    ("Curtis Blaydes", "Josh Hokit"),
+    ("Dominick Reyes", "Johnny Walker"),
+    ("Cub Swanson", "Nate Landwehr"),
+    ("Patricio Pitbull", "Aaron Pico"),
+    ("Kevin Holland", "Randy Brown"),
+    ("Mateusz Gamrot", "Esteban Ribovics"),
+]
+
+
+async def _analyze_all_fights(db: AsyncSession) -> list[dict]:
+    """Run analysis on all fights on the card."""
+    all_odds = await fetch_odds()
+    results = []
+
+    for fa_name, fb_name in CARD_FIGHTS:
+        a = await get_fighter_stats(fa_name, db)
+        b = await get_fighter_stats(fb_name, db)
+        if not a or not b:
+            continue
+
+        prediction = analyze_matchup(a, b)
+        fight_odds = _find_odds([fa_name, fb_name], all_odds)
+
+        # Determine winner odds
+        winner_odds = -150  # default
+        if fight_odds:
+            if prediction["predicted_winner"] == fa_name:
+                winner_odds = fight_odds.get("fighter_a_odds", -150)
+            else:
+                winner_odds = fight_odds.get("fighter_b_odds", -150)
+
+        betting = analyze_betting(a, b, fight_odds, prediction)
+
+        results.append({
+            "fighter_a": fa_name,
+            "fighter_b": fb_name,
+            "predicted_winner": prediction["predicted_winner"],
+            "method": prediction["method"],
+            "confidence": prediction["confidence"],
+            "winner_odds": winner_odds,
+            "reasoning": prediction["factors"][0] if prediction["factors"] else "",
+            "betting": betting,
+        })
+
+    return results
+
+
+async def _handle_parlay(num_legs: int, db: AsyncSession) -> dict:
+    """Build a parlay with the specified number of legs."""
+    analyses = await _analyze_all_fights(db)
+    if not analyses:
+        return {"intent": "parlay", "response": "Couldn't analyze fights for parlay.", "data": None}
+
+    parlay = build_parlay(analyses, num_legs)
+
+    lines = [
+        f"🎰 **{parlay['num_legs']}-Leg Parlay**\n",
+        "---\n",
+    ]
+
+    for i, leg in enumerate(parlay["legs"], 1):
+        conf = leg["confidence"]
+        emoji = "🟢" if conf > 65 else "🟡" if conf > 55 else "🔴"
+        lines.append(f"**Leg {i}:** {emoji} **{leg['fighter']}** ({leg['odds']})")
+        lines.append(f"  By {leg['method']} — {conf}% confidence")
+        if leg.get("reasoning"):
+            lines.append(f"  _{leg['reasoning']}_\n")
+
+    lines.append("---\n")
+    lines.append(f"💰 **Combined Odds:** {parlay['combined_odds']}")
+    lines.append(f"📊 **Implied Probability:** {parlay['implied_probability']}")
+    lines.append(f"💵 **$100 Payout:** {parlay['payout_per_100']}")
+
+    risk_emoji = "🟢" if parlay["risk"] == "Medium" else "🟡" if parlay["risk"] == "High" else "🔴"
+    lines.append(f"⚠️ **Risk:** {risk_emoji} {parlay['risk']}")
+    lines.append("\n_This is not financial advice._")
+
+    return {"intent": "parlay", "response": "\n".join(lines), "data": parlay}
+
+
+async def _handle_best_bets(db: AsyncSession) -> dict:
+    """Generate the best bets across all fights on the card."""
+    analyses = await _analyze_all_fights(db)
+    if not analyses:
+        return {"intent": "build_bet", "response": "Couldn't analyze fights.", "data": None}
+
+    all_betting = [a["betting"] for a in analyses if a.get("betting")]
+    ranked_bets = build_best_bets_card(all_betting)
+
+    lines = [
+        "🔥 **Best Bets — UFC 327**\n",
+        "---\n",
+    ]
+
+    # Top picks (max 5)
+    for i, bet in enumerate(ranked_bets[:5], 1):
+        risk_emoji = "🟢" if bet["risk"] == "Low" else "🟡" if bet["risk"] == "Medium" else "🔴"
+        lines.append(f"**{i}.** {risk_emoji} **{bet['bet']}** ({bet['odds']})")
+        lines.append(f"   {bet.get('fight', '')} — {bet['risk']} risk")
+        lines.append(f"   _{bet['reasoning']}_\n")
+
+    # Also suggest a parlay
+    parlay = build_parlay(analyses, 3)
+    lines.append("---\n")
+    lines.append("🎰 **Quick 3-Leg Parlay:**")
+    for leg in parlay["legs"]:
+        lines.append(f"  • **{leg['fighter']}** ({leg['odds']})")
+    lines.append(f"  💰 Combined: {parlay['combined_odds']} | Payout: {parlay['payout_per_100']} per $100")
+
+    lines.append("\n_This is not financial advice._")
+
+    return {"intent": "build_bet", "response": "\n".join(lines), "data": {"bets": ranked_bets, "parlay": parlay}}
+
+
 # ── Main Chat Processor ──
 
 async def process_chat(message: str, db: AsyncSession) -> dict:
@@ -254,6 +394,20 @@ async def process_chat(message: str, db: AsyncSession) -> dict:
         events = await fetch_events()
         text = _format_fight_card(events)
         return {"intent": intent, "response": text, "data": events}
+
+    # ─── Parlay Builder ───
+    if intent == "parlay":
+        num_legs = 3
+        leg_match = re.search(r"(\d+)\s*leg", message.lower())
+        if leg_match:
+            num_legs = min(int(leg_match.group(1)), 5)
+        return await _handle_parlay(num_legs, db)
+
+    # ─── Build Me a Bet / Best Bets ───
+    if intent == "build_bet":
+        if any(w in message.lower() for w in ["parlay", "multi", "combo", "leg"]):
+            return await _handle_parlay(3, db)
+        return await _handle_best_bets(db)
 
     # ─── Deep Analysis Mode ───
     if intent == "deep_analysis" and len(fighters) >= 2:
