@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FightIQ</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0d0d0d;
+    color: #fff;
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding-bottom: 80px;
+    overflow-x: hidden;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 2px solid #c0392b;
+    position: sticky;
+    top: 0;
+    background: #0d0d0d;
+    z-index: 100;
+  }
+  .header-icon {
+    font-size: 22px;
+    cursor: pointer;
+    color: #fff;
+    width: 32px;
+    text-align: center;
+  }
+  .header-logo {
+    font-size: 22px;
+    font-weight: 800;
+    font-style: italic;
+    letter-spacing: 1px;
+  }
+
+  /* Event Banner */
+  .event-banner {
+    background: linear-gradient(135deg, #1a1a1a 0%, #1f1f1f 100%);
+    margin: 16px;
+    border-radius: 12px;
+    padding: 18px 20px;
+    border: 1px solid #2a2a2a;
+  }
+  .event-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .event-subtitle {
+    font-size: 13px;
+    color: #888;
+  }
+  .fight-card {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .fight-card-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+  }
+  .fight-card-item .label {
+    font-weight: 700;
+    color: #ccc;
+  }
+  .fight-card-item .emoji {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+  }
+
+  /* Fighter Breakdown */
+  .section {
+    margin: 16px;
+    background: linear-gradient(135deg, #1a1a1a 0%, #181818 100%);
+    border-radius: 12px;
+    border: 1px solid #2a2a2a;
+    overflow: hidden;
+  }
+  .section-header {
+    padding: 18px 20px 0;
+  }
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .matchup-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    margin-bottom: 12px;
+  }
+  .matchup-names {
+    font-size: 14px;
+    color: #ccc;
+  }
+  .matchup-names strong {
+    color: #fff;
+  }
+  .fighter-avatars {
+    display: flex;
+    gap: -8px;
+  }
+  .fighter-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #333;
+    background: #2a2a2a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: #888;
+  }
+  .fighter-avatar:last-child {
+    margin-left: -10px;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    padding: 0 20px;
+    gap: 0;
+    margin-bottom: 16px;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s;
+    color: #888;
+  }
+  .tab.active {
+    background: #c0392b;
+    color: #fff;
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 0 20px 20px;
+  }
+  .stat-card {
+    background: #111;
+    border-radius: 10px;
+    padding: 14px;
+    border: 1px solid #222;
+  }
+  .stat-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #999;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .bar-chart-container {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 20px;
+    height: 100px;
+    padding-top: 8px;
+  }
+  .bar-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .bar-value {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .bar {
+    width: 40px;
+    border-radius: 4px 4px 0 0;
+    min-height: 10px;
+  }
+  .bar-red { background: linear-gradient(to top, #a00, #e04040); }
+  .bar-yellow { background: linear-gradient(to top, #b8860b, #ffd700); }
+  .bar-label {
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  .bar-label.red { color: #e04040; }
+  .bar-label.yellow { color: #ffd700; }
+
+  .radar-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 160px;
+  }
+  .radar-container canvas {
+    max-height: 150px;
+    max-width: 150px;
+  }
+
+  /* Odds & Picks */
+  .odds-section {
+    margin: 16px;
+    background: linear-gradient(135deg, #1a1a1a 0%, #181818 100%);
+    border-radius: 12px;
+    border: 1px solid #2a2a2a;
+    padding: 20px;
+  }
+  .odds-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+  .odds-subtitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccc;
+    margin-bottom: 12px;
+  }
+  .odds-bar {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid #333;
+  }
+  .odds-bar-left {
+    flex: 36;
+    background: #2a2a2a;
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .odds-bar-right {
+    flex: 64;
+    background: #1a3a1a;
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #4ade80;
+  }
+  .odds-name { color: #ccc; }
+  .odds-value-red { color: #e04040; }
+  .odds-value-green { color: #4ade80; }
+
+  .best-bet {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .best-bet-icon {
+    font-size: 20px;
+    margin-top: 2px;
+  }
+  .best-bet-text {
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .best-bet-text span {
+    font-weight: 400;
+    color: #ccc;
+  }
+  .risk {
+    font-size: 14px;
+    margin-left: 30px;
+    margin-bottom: 6px;
+  }
+  .risk strong {
+    color: #fbbf24;
+  }
+  .disclaimer {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    margin-left: 30px;
+  }
+
+  /* Bottom Nav */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    background: #111;
+    border-top: 1px solid #2a2a2a;
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    z-index: 100;
+  }
+  .nav-items {
+    display: flex;
+    flex: 1;
+    justify-content: space-around;
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .nav-item.active .nav-icon { color: #c0392b; }
+  .nav-item.active .nav-label { color: #c0392b; }
+  .nav-icon {
+    font-size: 20px;
+    color: #666;
+  }
+  .nav-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #666;
+  }
+  .mic-btn {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #1a6dff, #3b82f6);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(59,130,246,0.3);
+    margin-left: 8px;
+  }
+
+  /* SVG Icons inline */
+  .icon-svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-icon">&#9776;</div>
+  <div class="header-logo">FightIQ</div>
+  <div class="header-icon">&#128276;</div>
+</div>
+
+<!-- Event Banner -->
+<div class="event-banner">
+  <div class="event-title">&#128293; UFC 300: Oliveira vs Makhachev</div>
+  <div class="event-subtitle">Tonight - Las Vegas</div>
+  <div class="fight-card">
+    <div class="fight-card-item">
+      <span class="emoji">&#129354;</span>
+      <span><span class="label">Main Event:</span> Oliveira vs Makhachev</span>
+    </div>
+    <div class="fight-card-item">
+      <span class="emoji">&#129354;</span>
+      <span><span class="label">Main Card:</span> Gaethje vs Holloway</span>
+    </div>
+    <div class="fight-card-item">
+      <span class="emoji">&#129354;</span>
+      <span>Yan vs Figueiredo</span>
+    </div>
+  </div>
+</div>
+
+<!-- Fighter Breakdown -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-title">Fighter Breakdown</div>
+  </div>
+  <div class="matchup-row">
+    <div class="matchup-names">
+      <strong>Charles Oliveira</strong> vs <strong>Islam</strong> <span style="color:#666;">Makhachev</span>
+    </div>
+    <div class="fighter-avatars">
+      <div class="fighter-avatar">&#129354;</div>
+      <div class="fighter-avatar">&#129354;</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this)">Stats</div>
+    <div class="tab" onclick="switchTab(this)">Analysis</div>
+    <div class="tab" onclick="switchTab(this)">Betting</div>
+  </div>
+
+  <!-- Stats Content -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-card-title">Strikes Per Minute</div>
+      <div class="bar-chart-container">
+        <div class="bar-group">
+          <div class="bar-value" style="color:#e04040;">3.6</div>
+          <div class="bar bar-red" style="height:75px;"></div>
+          <div class="bar-label red">Oliveira</div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-value" style="color:#ffd700;">2.4</div>
+          <div class="bar bar-yellow" style="height:50px;"></div>
+          <div class="bar-label yellow">Makhachev</div>
+        </div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-title">Skill Comparison</div>
+      <div class="radar-container">
+        <canvas id="radarChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Odds & Picks -->
+<div class="odds-section">
+  <div class="odds-title">Odds & Picks</div>
+  <div class="odds-subtitle">&#127936; Current Odds</div>
+  <div class="odds-bar">
+    <div class="odds-bar-left">
+      <span class="odds-name">Oliveira:</span>
+      <span class="odds-value-red">+175 (36%)</span>
+    </div>
+    <div class="odds-bar-right">
+      <span>Makhachev</span>
+      <span>-210 (68%)</span>
+    </div>
+  </div>
+  <div class="best-bet">
+    <span class="best-bet-icon">&#127919;</span>
+    <div class="best-bet-text">Best Bet: <span>Makhachev by Submission</span></div>
+  </div>
+  <div class="risk">Risk: <strong>Medium</strong></div>
+  <div class="disclaimer">This is not financial advice.</div>
+</div>
+
+<!-- Bottom Nav -->
+<div class="bottom-nav">
+  <div class="nav-items">
+    <div class="nav-item active">
+      <div class="nav-icon">&#129354;</div>
+      <div class="nav-label">Fights</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon">&#128202;</div>
+      <div class="nav-label">Stats</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon">&#127942;</div>
+      <div class="nav-label">Betting</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon">&#128172;</div>
+      <div class="nav-label">Chat</div>
+    </div>
+  </div>
+  <div class="mic-btn">&#127908;</div>
+</div>
+
+<script>
+// Radar Chart
+const ctx = document.getElementById('radarChart').getContext('2d');
+new Chart(ctx, {
+  type: 'radar',
+  data: {
+    labels: ['Striking', 'Wrestling', 'Submissions', 'Cardio', 'Defense'],
+    datasets: [
+      {
+        label: 'Oliveira',
+        data: [78, 60, 95, 85, 65],
+        borderColor: '#e04040',
+        backgroundColor: 'rgba(224, 64, 64, 0.15)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#e04040',
+      },
+      {
+        label: 'Makhachev',
+        data: [72, 95, 75, 80, 82],
+        borderColor: '#ffd700',
+        backgroundColor: 'rgba(255, 215, 0, 0.1)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#ffd700',
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      r: {
+        beginAtZero: true,
+        max: 100,
+        ticks: { display: false, stepSize: 20 },
+        grid: { color: '#333' },
+        angleLines: { color: '#333' },
+        pointLabels: {
+          color: '#999',
+          font: { size: 9, weight: '600' }
+        }
+      }
+    },
+    plugins: {
+      legend: { display: false }
+    }
+  }
+});
+
+// Tab switching
+function switchTab(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
