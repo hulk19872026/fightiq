@@ -1,9 +1,32 @@
+import re
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.stats_agent import get_fighter_stats, compare_fighters
 from app.agents.research_agent import analyze_matchup
 from app.agents.betting_agent import analyze_betting
 from app.services.odds_api import fetch_odds
 from app.services.espn import fetch_events
+from app.services.search import search_fighter_stats, search_fight_info
+
+NOISE_WORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "for", "and", "but", "or",
+    "nor", "not", "so", "yet", "both", "each", "all", "any", "few",
+    "more", "most", "other", "some", "such", "no", "only", "own",
+    "same", "than", "too", "very", "just", "about", "above", "after",
+    "before", "between", "into", "through", "during", "of", "at", "by",
+    "with", "from", "up", "out", "on", "off", "over", "under", "to",
+    "in", "it", "its", "this", "that", "these", "those", "what", "which",
+    "who", "whom", "how", "when", "where", "why", "if", "then", "me",
+    "my", "i", "you", "your", "he", "she", "they", "we", "us",
+    "show", "tell", "give", "get", "list", "find", "look", "search",
+    "stats", "stat", "record", "compare", "versus", "fight", "fighter",
+    "fights", "card", "event", "odds", "bet", "bets", "betting",
+    "predict", "prediction", "analysis", "breakdown", "wins", "win",
+    "best", "pick", "picks", "ufc", "mma", "prelim", "prelims",
+    "main", "tonight", "next", "upcoming", "current", "info",
+}
 
 
 def detect_intent(message: str) -> str:
@@ -19,30 +42,63 @@ def detect_intent(message: str) -> str:
     return "general"
 
 
+# Known fighters on the current card
+NAME_MAP = {
+    "prochazka": "Jiri Prochazka", "jiri": "Jiri Prochazka",
+    "ulberg": "Carlos Ulberg",
+    "murzakanov": "Azamat Murzakanov", "azamat": "Azamat Murzakanov",
+    "costa": "Paulo Costa", "paulo": "Paulo Costa",
+    "blaydes": "Curtis Blaydes", "curtis": "Curtis Blaydes",
+    "hokit": "Josh Hokit",
+    "reyes": "Dominick Reyes", "dominick": "Dominick Reyes",
+    "walker": "Johnny Walker", "johnny": "Johnny Walker",
+    "swanson": "Cub Swanson", "cub": "Cub Swanson",
+    "landwehr": "Nate Landwehr",
+    "pitbull": "Patricio Pitbull", "patricio": "Patricio Pitbull",
+    "pico": "Aaron Pico", "aaron": "Aaron Pico",
+    "holland": "Kevin Holland", "kevin": "Kevin Holland",
+    "brown": "Randy Brown", "randy": "Randy Brown",
+    "gamrot": "Mateusz Gamrot", "mateusz": "Mateusz Gamrot",
+    "ribovics": "Esteban Ribovics", "esteban": "Esteban Ribovics",
+}
+
+
 def find_fighters_in_message(msg: str) -> list[str]:
     msg_lower = msg.lower()
     found = []
-    name_map = {
-        "prochazka": "Jiri Prochazka", "jiri": "Jiri Prochazka",
-        "ulberg": "Carlos Ulberg",
-        "murzakanov": "Azamat Murzakanov", "azamat": "Azamat Murzakanov",
-        "costa": "Paulo Costa", "paulo": "Paulo Costa",
-        "blaydes": "Curtis Blaydes", "curtis": "Curtis Blaydes",
-        "hokit": "Josh Hokit",
-        "reyes": "Dominick Reyes", "dominick": "Dominick Reyes",
-        "walker": "Johnny Walker", "johnny": "Johnny Walker",
-        "swanson": "Cub Swanson", "cub": "Cub Swanson",
-        "landwehr": "Nate Landwehr",
-        "pitbull": "Patricio Pitbull", "patricio": "Patricio Pitbull",
-        "pico": "Aaron Pico", "aaron": "Aaron Pico",
-        "holland": "Kevin Holland", "kevin": "Kevin Holland",
-        "brown": "Randy Brown", "randy": "Randy Brown",
-        "gamrot": "Mateusz Gamrot", "mateusz": "Mateusz Gamrot",
-        "ribovics": "Esteban Ribovics", "esteban": "Esteban Ribovics",
-    }
-    for key, full_name in name_map.items():
+
+    # Check known fighters first
+    for key, full_name in NAME_MAP.items():
         if key in msg_lower and full_name not in found:
             found.append(full_name)
+
+    if len(found) >= 2:
+        return found[:2]
+
+    # Try to extract unknown fighter names from "vs" pattern
+    vs_match = re.search(r"([A-Za-z\s\-']+?)\s+(?:vs\.?|versus)\s+([A-Za-z\s\-']+)", msg, re.IGNORECASE)
+    if vs_match:
+        for group_idx in [1, 2]:
+            name = vs_match.group(group_idx).strip()
+            # Clean up: remove noise words from the start
+            words = name.split()
+            cleaned = [w for w in words if w.lower() not in NOISE_WORDS]
+            if cleaned:
+                clean_name = " ".join(cleaned).title()
+                if clean_name not in found and len(clean_name) > 2:
+                    found.append(clean_name)
+
+    if found:
+        return found[:2]
+
+    # Try to detect a single name: look for capitalized words that aren't noise
+    words = re.findall(r"[A-Za-z\-']+", msg)
+    potential_names = [w for w in words if w.lower() not in NOISE_WORDS and len(w) > 2]
+    if potential_names:
+        # Join consecutive potential name words
+        name = " ".join(potential_names[:3]).title()
+        found.append(name)
+
     return found[:2]
 
 
@@ -108,18 +164,37 @@ async def process_chat(message: str, db: AsyncSession) -> dict:
                     f"Win Streak: {a['win_streak']} vs {b['win_streak']}"
                 )
                 return {"intent": intent, "response": text, "data": comp}
+            # Partial: one found, one not
+            found_fighter = a or b
+            missing = fighters[1] if a else fighters[0]
+            if found_fighter:
+                text = (
+                    f"Found **{found_fighter['name']}** but couldn't find stats for **{missing}**.\n\n"
+                    f"**{found_fighter['name']}**: {found_fighter['wins']}-{found_fighter['losses']}, "
+                    f"{found_fighter['strikes_per_min']} SLpM"
+                )
+                return {"intent": intent, "response": text, "data": comp}
         else:
             stats = await get_fighter_stats(fighters[0], db)
             if stats:
-                text = (
-                    f"**{stats['name']}**\n"
-                    f"Record: {stats['wins']}-{stats['losses']} ({stats['win_streak']} win streak)\n"
-                    f"Strikes/Min: {stats['strikes_per_min']} | Accuracy: {stats['strike_accuracy']}%\n"
-                    f"Takedowns: {stats['takedowns_avg']}/15m | TD Defense: {stats['td_defense']}%\n"
-                    f"Submissions: {stats['submission_avg']}/15m\n"
-                    f"Height: {stats['height']} | Reach: {stats['reach']}\" | Stance: {stats['stance']}"
-                )
+                source_tag = " *(via web)*" if stats.get("source") == "web_search" else ""
+                text = f"**{stats['name']}**{source_tag}\n"
+                text += f"Record: {stats['wins']}-{stats['losses']}"
+                if stats.get("win_streak"):
+                    text += f" ({stats['win_streak']} win streak)"
+                text += "\n"
+                if stats.get("strikes_per_min"):
+                    text += f"Strikes/Min: {stats['strikes_per_min']} | Accuracy: {stats['strike_accuracy']}%\n"
+                if stats.get("takedowns_avg"):
+                    text += f"Takedowns: {stats['takedowns_avg']}/15m | TD Defense: {stats['td_defense']}%\n"
+                if stats.get("submission_avg"):
+                    text += f"Submissions: {stats['submission_avg']}/15m\n"
+                if stats.get("height") and stats["height"] != "N/A":
+                    text += f"Height: {stats['height']} | Reach: {stats['reach']}\" | Stance: {stats.get('stance', 'N/A')}"
                 return {"intent": intent, "response": text, "data": stats}
+            else:
+                text = f"Couldn't find stats for **{fighters[0]}**. Searched database and web.\n\nTry a fighter on the current card like: Prochazka, Ulberg, Costa, Blaydes"
+                return {"intent": intent, "response": text, "data": None}
 
     if intent in ("analysis", "betting", "general") and len(fighters) >= 2:
         a = await get_fighter_stats(fighters[0], db)
@@ -155,12 +230,23 @@ async def process_chat(message: str, db: AsyncSession) -> dict:
     if fighters:
         stats = await get_fighter_stats(fighters[0], db)
         if stats:
+            source_tag = " *(via web search)*" if stats.get("source") == "web_search" else ""
             text = (
-                f"**{stats['name']}** — {stats['wins']}-{stats['losses']}\n"
-                f"Strikes: {stats['strikes_per_min']}/min | Takedowns: {stats['takedowns_avg']}/15m\n\n"
-                f"Try: \"compare {stats['name'].split()[-1]} vs [opponent]\" or \"who wins {stats['name'].split()[-1]} vs [opponent]\""
+                f"**{stats['name']}**{source_tag}\n"
+                f"Record: {stats['wins']}-{stats['losses']}\n"
             )
+            if stats.get("strikes_per_min"):
+                text += f"Strikes: {stats['strikes_per_min']}/min | Takedowns: {stats['takedowns_avg']}/15m\n"
+            if stats.get("height") and stats["height"] != "N/A":
+                text += f"Height: {stats['height']} | Reach: {stats['reach']}\" | Stance: {stats.get('stance', 'N/A')}\n"
+            text += f"\nTry: \"compare {stats['name'].split()[-1]} vs [opponent]\" or \"who wins {stats['name'].split()[-1]} vs [opponent]\""
             return {"intent": "general", "response": text, "data": stats}
+        else:
+            text = (
+                f"Couldn't find stats for **{fighters[0]}**. Searched the database and web.\n\n"
+                f"Try a UFC fighter name like: Prochazka, Ulberg, Costa, Blaydes, Holloway, etc."
+            )
+            return {"intent": "general", "response": text, "data": None}
 
     # Default — show the fight card
     events = await fetch_events()
