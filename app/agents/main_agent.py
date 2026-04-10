@@ -19,6 +19,7 @@ INTENT_KEYWORDS = {
     "parlay": [
         "parlay", "multi", "accumulator", "acca", "combo bet",
         "3 leg", "4 leg", "5 leg", "2 leg", "leg parlay",
+        "3-leg", "4-leg", "5-leg", "2-leg",
     ],
     "build_bet": [
         "make me a bet", "make a bet", "build a bet", "give me a bet",
@@ -266,6 +267,35 @@ def _format_deep_analysis(a: dict, b: dict, prediction: dict, betting_data: dict
 
 # ── Dynamic Fight Card for Analysis ──
 
+
+def _odds_based_prediction(fa_name: str, fb_name: str, odds: dict) -> dict:
+    """Create a basic prediction from odds when fighter stats are unavailable."""
+    a_odds = odds.get("fighter_a_odds", -150)
+    b_odds = odds.get("fighter_b_odds", 130)
+    a_prob = odds.get("fighter_a_prob", 55)
+    b_prob = odds.get("fighter_b_prob", 45)
+
+    if a_prob >= b_prob:
+        winner = fa_name
+        winner_odds = a_odds
+        confidence = min(a_prob, 75)
+    else:
+        winner = fb_name
+        winner_odds = b_odds
+        confidence = min(b_prob, 75)
+
+    return {
+        "fighter_a": fa_name,
+        "fighter_b": fb_name,
+        "predicted_winner": winner,
+        "method": "Decision",
+        "confidence": confidence,
+        "winner_odds": winner_odds,
+        "reasoning": f"Based on betting odds ({'+' if winner_odds > 0 else ''}{winner_odds})",
+        "betting": None,
+    }
+
+
 async def _get_card_fights() -> list[tuple[str, str]]:
     """Get fight pairs from the live event data."""
     events = await fetch_events()
@@ -300,32 +330,34 @@ async def _analyze_all_fights(db: AsyncSession) -> list[dict]:
     for fa_name, fb_name in card_fights:
         a = await get_fighter_stats(fa_name, db)
         b = await get_fighter_stats(fb_name, db)
-        if not a or not b:
-            continue
-
-        prediction = analyze_matchup(a, b)
         fight_odds = _find_odds([fa_name, fb_name], all_odds)
 
-        # Determine winner odds
-        winner_odds = -150  # default
-        if fight_odds:
-            if prediction["predicted_winner"] == fa_name:
-                winner_odds = fight_odds.get("fighter_a_odds", -150)
-            else:
-                winner_odds = fight_odds.get("fighter_b_odds", -150)
+        if a and b:
+            prediction = analyze_matchup(a, b)
 
-        betting = analyze_betting(a, b, fight_odds, prediction)
+            # Determine winner odds
+            winner_odds = -150  # default
+            if fight_odds:
+                if prediction["predicted_winner"] == fa_name:
+                    winner_odds = fight_odds.get("fighter_a_odds", -150)
+                else:
+                    winner_odds = fight_odds.get("fighter_b_odds", -150)
 
-        results.append({
-            "fighter_a": fa_name,
-            "fighter_b": fb_name,
-            "predicted_winner": prediction["predicted_winner"],
-            "method": prediction["method"],
-            "confidence": prediction["confidence"],
-            "winner_odds": winner_odds,
-            "reasoning": prediction["factors"][0] if prediction["factors"] else "",
-            "betting": betting,
-        })
+            betting = analyze_betting(a, b, fight_odds, prediction)
+
+            results.append({
+                "fighter_a": fa_name,
+                "fighter_b": fb_name,
+                "predicted_winner": prediction["predicted_winner"],
+                "method": prediction["method"],
+                "confidence": prediction["confidence"],
+                "winner_odds": winner_odds,
+                "reasoning": prediction["factors"][0] if prediction["factors"] else "",
+                "betting": betting,
+            })
+        elif fight_odds:
+            # Fallback: use odds to build a prediction when stats are unavailable
+            results.append(_odds_based_prediction(fa_name, fb_name, fight_odds))
 
     return results
 
@@ -412,7 +444,7 @@ async def process_chat(message: str, db: AsyncSession) -> dict:
     # ─── Parlay Builder ───
     if intent == "parlay":
         num_legs = 3
-        leg_match = re.search(r"(\d+)\s*leg", message.lower())
+        leg_match = re.search(r"(\d+)[\s\-]*leg", message.lower())
         if leg_match:
             num_legs = min(int(leg_match.group(1)), 5)
         return await _handle_parlay(num_legs, db)
