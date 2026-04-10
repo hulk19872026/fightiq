@@ -88,16 +88,26 @@ def analyze_betting(fighter_a: dict, fighter_b: dict, odds: dict | None, predict
 
 
 def build_parlay(picks: list[dict], num_legs: int = 3) -> dict:
-    """Build a parlay from a list of analyzed fight picks, sorted by confidence."""
-    # Sort by confidence (highest first)
+    """Build a parlay from a list of analyzed fight picks, sorted by confidence.
+
+    Deduplicates by fighter so each leg is a different fight.
+    """
     sorted_picks = sorted(picks, key=lambda p: p["confidence"], reverse=True)
 
     legs = []
+    used_fighters: set[str] = set()
     parlay_prob = 1.0
     combined_american = 100
 
-    for pick in sorted_picks[:num_legs]:
+    for pick in sorted_picks:
+        if len(legs) >= num_legs:
+            break
+
         winner = pick["predicted_winner"]
+        # Skip if this fighter is already in the parlay
+        if winner.lower() in used_fighters:
+            continue
+
         conf = pick["confidence"]
         method = pick["method"]
         odds_val = pick.get("winner_odds", -150)
@@ -110,6 +120,11 @@ def build_parlay(picks: list[dict], num_legs: int = 3) -> dict:
             "reasoning": pick.get("reasoning", ""),
         }
         legs.append(leg)
+        used_fighters.add(winner.lower())
+        # Also mark the opponent so we don't pick the same fight twice
+        for key in ("fighter_a", "fighter_b"):
+            if key in pick:
+                used_fighters.add(pick[key].lower())
 
         implied = american_to_implied(odds_val) / 100.0
         parlay_prob *= implied
