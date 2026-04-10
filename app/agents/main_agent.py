@@ -27,6 +27,9 @@ INTENT_KEYWORDS = {
         "lock of the night", "locks", "sure thing", "gimme a pick",
         "what should i bet", "what to bet", "best bets tonight",
         "best bets", "top picks", "tonight's picks", "who do i bet on",
+        "easy bet", "safe bet", "worst bet", "safest pick", "best pick",
+        "give me a pick", "who should i bet", "smart bet", "good bet",
+        "quick bet", "risky bet", "underdog", "favorite", "lock pick",
     ],
     "betting": [
         "odds", "bet", "bets", "betting", "money", "wager", "pick", "picks",
@@ -468,8 +471,33 @@ async def _handle_parlay(num_legs: int, db: AsyncSession) -> dict:
 async def _handle_best_bets(db: AsyncSession) -> dict:
     """Generate the best bets across all fights on the card."""
     analyses = await _analyze_all_fights(db)
+    analyses = _guarantee_picks(analyses, 5)
+
     if not analyses:
         return {"intent": "build_bet", "response": "Couldn't analyze fights.", "data": None}
+
+    # Build betting analysis for odds-only picks that are missing it
+    for pick in analyses:
+        if pick.get("betting") is None:
+            odds_val = pick.get("winner_odds", -150)
+            pick["betting"] = {
+                "fighter_a": pick.get("fighter_a", ""),
+                "fighter_b": pick.get("fighter_b", ""),
+                "best_bet": {
+                    "bet": f"{pick['predicted_winner']} Moneyline",
+                    "odds": f"{'+' if odds_val > 0 else ''}{odds_val}",
+                    "edge": f"+{max(0, pick['confidence'] - 50)}%",
+                    "risk": "Low" if pick["confidence"] > 70 else "Medium" if pick["confidence"] > 55 else "High",
+                    "reasoning": pick.get("reasoning", f"Model favors {pick['predicted_winner']}"),
+                },
+                "all_bets": [{
+                    "bet": f"{pick['predicted_winner']} Moneyline",
+                    "odds": f"{'+' if odds_val > 0 else ''}{odds_val}",
+                    "edge": f"+{max(0, pick['confidence'] - 50)}%",
+                    "risk": "Low" if pick["confidence"] > 70 else "Medium" if pick["confidence"] > 55 else "High",
+                    "reasoning": pick.get("reasoning", f"Model favors {pick['predicted_winner']}"),
+                }],
+            }
 
     all_betting = [a["betting"] for a in analyses if a.get("betting")]
     ranked_bets = build_best_bets_card(all_betting)
@@ -483,13 +511,13 @@ async def _handle_best_bets(db: AsyncSession) -> dict:
     for i, bet in enumerate(ranked_bets[:5], 1):
         risk_emoji = "🟢" if bet["risk"] == "Low" else "🟡" if bet["risk"] == "Medium" else "🔴"
         lines.append(f"**{i}.** {risk_emoji} **{bet['bet']}** ({bet['odds']})")
-        lines.append(f"   {bet.get('fight', '')} — {bet['risk']} risk")
+        lines.append(f"   {bet.get('fight', '')} — {bet['risk']} risk | Edge: {bet.get('edge', 'N/A')}")
         lines.append(f"   _{bet['reasoning']}_\n")
 
-    # Also suggest a parlay
+    # Also suggest a 3-leg parlay
     parlay = build_parlay(analyses, 3)
     lines.append("---\n")
-    lines.append("🎰 **Quick 3-Leg Parlay:**")
+    lines.append(f"🎰 **Quick {parlay['num_legs']}-Leg Parlay:**")
     for leg in parlay["legs"]:
         lines.append(f"  • **{leg['fighter']}** ({leg['odds']})")
     lines.append(f"  💰 Combined: {parlay['combined_odds']} | Payout: {parlay['payout_per_100']} per $100")
@@ -615,8 +643,10 @@ async def process_chat(message: str, db: AsyncSession) -> dict:
                     text += f"• {risk_emoji} **{bet['bet']}** ({bet['odds']}) — {bet['risk']} risk\n  _{bet['reasoning']}_\n\n"
                 text += "_This is not financial advice._"
                 return {"intent": intent, "response": text, "data": betting}
-        else:
-            # Show all odds
+        # No specific fighters — if user wants "odds" or "lines", show them;
+        # otherwise give smart picks
+        msg_lower = message.lower()
+        if any(w in msg_lower for w in ["odds", "lines", "moneyline", "line"]):
             all_odds = await fetch_odds()
             text = "💰 **Tonight's Lines**\n\n"
             for o in all_odds:
@@ -626,6 +656,7 @@ async def process_chat(message: str, db: AsyncSession) -> dict:
                     f"  {o['fighter_b']}: {'+' if o['fighter_b_odds'] > 0 else ''}{o['fighter_b_odds']} ({o['fighter_b_prob']}%)\n\n"
                 )
             return {"intent": intent, "response": text, "data": all_odds}
+        return await _handle_best_bets(db)
 
     # ─── Live / Latest (Web Search) ───
     if intent == "live":
