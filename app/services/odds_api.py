@@ -81,14 +81,31 @@ async def _fetch_events_from_odds_api() -> list[dict]:
             resp.raise_for_status()
 
         raw = resp.json()
-        print(f"[FightIQ] Events API returned {len(raw)} fights")
+        print(f"[FightIQ] Events API returned {len(raw)} total MMA fights")
         if not raw:
             return []
+
+        # Filter to UFC-only events.
+        # The Odds API "description" field often contains "UFC" for UFC events.
+        # We also accept events where home_team/away_team are known UFC fighters.
+        ufc_fights = []
+        for evt in raw:
+            desc = (evt.get("description") or "").lower()
+            title = (evt.get("sport_title") or "").lower()
+            # Accept if description mentions UFC, or if the event ID hints at UFC
+            if "ufc" in desc or "ufc" in title or "ufc" in evt.get("id", ""):
+                ufc_fights.append(evt)
+        print(f"[FightIQ] Filtered to {len(ufc_fights)} UFC fights")
+
+        if not ufc_fights:
+            # Fallback: if no UFC tag found, the API might not include descriptions.
+            # Use all fights but cap per card to avoid flooding with regional events.
+            ufc_fights = raw
 
         # Group fights by commence_time (events on the same day = same card)
         from collections import defaultdict
         cards = defaultdict(list)
-        for evt in raw:
+        for evt in ufc_fights:
             date = evt.get("commence_time", "")[:10]  # YYYY-MM-DD
             cards[date].append(evt)
         print(f"[FightIQ] Events grouped into {len(cards)} cards: {list(cards.keys())}")
@@ -104,7 +121,7 @@ async def _fetch_events_from_odds_api() -> list[dict]:
                 "location": "TBD",
                 "fights": [],
             }
-            for i, f in enumerate(fights):
+            for i, f in enumerate(fights[:15]):  # Cap at 15 fights per card
                 event["fights"].append({
                     "fighter_a": f.get("home_team", "TBD"),
                     "fighter_b": f.get("away_team", "TBD"),
@@ -113,8 +130,9 @@ async def _fetch_events_from_odds_api() -> list[dict]:
                 })
             events.append(event)
 
-        return events[:3]  # Next 3 events max
-    except Exception:
+        return events[:3]  # Next 3 UFC events max
+    except Exception as e:
+        print(f"[FightIQ] Events API error: {e}")
         return []
 
 
@@ -225,9 +243,21 @@ async def _fetch_odds_from_api() -> list[dict]:
             resp.raise_for_status()
 
         raw = resp.json()
-        print(f"[FightIQ] Odds API returned {len(raw)} fights with odds")
+        print(f"[FightIQ] Odds API returned {len(raw)} total fights with odds")
+
+        # Filter to UFC-only
+        ufc_events = [
+            e for e in raw
+            if "ufc" in (e.get("description") or "").lower()
+            or "ufc" in (e.get("sport_title") or "").lower()
+            or "ufc" in e.get("id", "")
+        ]
+        # Fall back to all if no UFC tag found
+        events_to_parse = ufc_events if ufc_events else raw
+        print(f"[FightIQ] Filtered to {len(events_to_parse)} UFC fights with odds")
+
         results = []
-        for event in raw:
+        for event in events_to_parse:
             bookmakers = event.get("bookmakers", [])
             if not bookmakers:
                 continue
@@ -254,7 +284,8 @@ async def _fetch_odds_from_api() -> list[dict]:
             })
 
         return results
-    except Exception:
+    except Exception as e:
+        print(f"[FightIQ] Odds API error: {e}")
         return []
 
 
