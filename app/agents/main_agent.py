@@ -304,7 +304,7 @@ async def _get_card_fights() -> list[tuple[str, str]]:
         for f in ev.get("fights", []):
             a = f.get("fighter_a", "")
             b = f.get("fighter_b", "")
-            if a and b:
+            if a and b and a != "TBD" and b != "TBD":
                 pairs.append((a, b))
     return pairs if pairs else FALLBACK_CARD_FIGHTS
 
@@ -365,6 +365,21 @@ async def _analyze_all_fights(db: AsyncSession) -> list[dict]:
 async def _handle_parlay(num_legs: int, db: AsyncSession) -> dict:
     """Build a parlay with the specified number of legs."""
     analyses = await _analyze_all_fights(db)
+
+    # Supplement from fallback odds when we don't have enough analyses
+    if len(analyses) < num_legs:
+        from app.services.odds_api import FALLBACK_ODDS
+        covered = {a["fighter_a"].split()[-1].lower() for a in analyses}
+        for odds in FALLBACK_ODDS:
+            if len(analyses) >= num_legs:
+                break
+            last_a = odds["fighter_a"].split()[-1].lower()
+            last_b = odds["fighter_b"].split()[-1].lower()
+            if last_a not in covered and last_b not in covered:
+                analyses.append(_odds_based_prediction(odds["fighter_a"], odds["fighter_b"], odds))
+                covered.add(last_a)
+                covered.add(last_b)
+
     if not analyses:
         return {"intent": "parlay", "response": "Couldn't analyze fights for parlay.", "data": None}
 

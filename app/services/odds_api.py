@@ -229,5 +229,8 @@ FALLBACK_ODDS = [
     {"fight": "Murzakanov vs Costa", "fighter_a": "Azamat Murzakanov", "fighter_b": "Paulo Costa", "fighter_a_odds": -175, "fighter_b_odds": 150, "fighter_a_prob": 64, "fighter_b_prob": 40},
     {"fight": "Blaydes vs Hokit", "fighter_a": "Curtis Blaydes", "fighter_b": "Josh Hokit", "fighter_a_odds": -200, "fighter_b_odds": 170, "fighter_a_prob": 67, "fighter_b_prob": 37},
     {"fight": "Reyes vs Walker", "fighter_a": "Dominick Reyes", "fighter_b": "Johnny Walker", "fighter_a_odds": 110, "fighter_b_odds": -130, "fighter_a_prob": 48, "fighter_b_prob": 57},
+    {"fight": "Swanson vs Landwehr", "fighter_a": "Cub Swanson", "fighter_b": "Nate Landwehr", "fighter_a_odds": 115, "fighter_b_odds": -135, "fighter_a_prob": 47, "fighter_b_prob": 57},
     {"fight": "Pitbull vs Pico", "fighter_a": "Patricio Pitbull", "fighter_b": "Aaron Pico", "fighter_a_odds": 140, "fighter_b_odds": -160, "fighter_a_prob": 42, "fighter_b_prob": 62},
+    {"fight": "Holland vs Brown", "fighter_a": "Kevin Holland", "fighter_b": "Randy Brown", "fighter_a_odds": -110, "fighter_b_odds": -110, "fighter_a_prob": 52, "fighter_b_prob": 52},
+    {"fight": "Gamrot vs Ribovics", "fighter_a": "Mateusz Gamrot", "fighter_b": "Esteban Ribovics", "fighter_a_odds": -300, "fighter_b_odds": 240, "fighter_a_prob": 75, "fighter_b_prob": 29},
 ]
