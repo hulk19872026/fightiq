@@ -45,6 +45,37 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/debug/api-status")
+async def debug_api_status():
+    """Check if the Odds API key is configured and working."""
+    import os
+    from app.services.odds_api import fetch_events, fetch_odds
+    from app.services.cache import _store
+
+    key = os.getenv("ODDS_API_KEY", "")
+    key_status = f"set ({len(key)} chars)" if key else "NOT SET"
+
+    events = await fetch_events()
+    odds = await fetch_odds()
+
+    # Check if data came from API or fallback
+    events_source = "fallback"
+    if events and events[0].get("date", "") not in ("Sat, Apr 11 – 9 PM ET",):
+        events_source = "live_api_or_web"
+
+    return {
+        "api_key": key_status,
+        "events_count": len(events),
+        "events_source": events_source,
+        "events_preview": [
+            {"name": e.get("name"), "date": e.get("date"), "fights": len(e.get("fights", []))}
+            for e in events
+        ],
+        "odds_count": len(odds),
+        "cache_keys": list(_store.keys()),
+    }
+
+
 # Serve React frontend
 if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")

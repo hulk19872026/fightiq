@@ -17,17 +17,22 @@ def american_to_implied(odds: int) -> int:
 # ── Events (fight card) ──
 
 async def fetch_events(query: str = "") -> list[dict]:
-    # Date-specific queries bypass the cache so we search fresh
+    # No date query → check cache first
     if not query:
         cached = cache_get("events_live", ttl=600)
         if cached:
             return cached
 
-    # Try The Odds API for live event data
-    if API_KEY and not query:
+    # ALWAYS try the Odds API when key is available (it returns ALL events)
+    if API_KEY:
         events = await _fetch_events_from_odds_api()
         if events:
             cache_set("events_live", events)
+            # If user asked about a date, filter to matching events
+            if query:
+                filtered = _filter_events_by_query(events, query)
+                if filtered:
+                    return filtered
             return events
 
     # Try web search (with custom query if provided)
@@ -43,13 +48,40 @@ async def fetch_events(query: str = "") -> list[dict]:
     return FALLBACK_EVENTS
 
 
+def _filter_events_by_query(events: list[dict], query: str) -> list[dict]:
+    """Filter events to those matching a date in the query string."""
+    import re
+    # Extract month + day from query like "UFC event April 17 2026 fight card"
+    match = re.search(
+        r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})",
+        query, re.IGNORECASE,
+    )
+    if not match:
+        return []
+
+    month_str = match.group(1)[:3]  # "Apr"
+    day = match.group(2)
+
+    filtered = []
+    for ev in events:
+        ev_date = ev.get("date", "")
+        # Match "Sat, Apr 17" or "Apr 17" format
+        if month_str.lower() in ev_date.lower() and day in re.findall(r"\d+", ev_date):
+            filtered.append(ev)
+    return filtered
+
+
 async def _fetch_events_from_odds_api() -> list[dict]:
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             resp = await client.get(EVENTS_URL, params={"apiKey": API_KEY})
+            if resp.status_code != 200:
+                print(f"[FightIQ] Odds API events: HTTP {resp.status_code}")
+                return []
             resp.raise_for_status()
 
         raw = resp.json()
+        print(f"[FightIQ] Events API returned {len(raw)} fights")
         if not raw:
             return []
 
@@ -59,6 +91,7 @@ async def _fetch_events_from_odds_api() -> list[dict]:
         for evt in raw:
             date = evt.get("commence_time", "")[:10]  # YYYY-MM-DD
             cards[date].append(evt)
+        print(f"[FightIQ] Events grouped into {len(cards)} cards: {list(cards.keys())}")
 
         events = []
         for date, fights in sorted(cards.items()):
@@ -183,11 +216,16 @@ async def _fetch_odds_from_api() -> list[dict]:
                     "regions": "us",
                     "markets": "h2h",
                     "oddsFormat": "american",
+                    "dateFormat": "iso",
                 },
             )
+            if resp.status_code != 200:
+                print(f"[FightIQ] Odds API odds: HTTP {resp.status_code}")
+                return []
             resp.raise_for_status()
 
         raw = resp.json()
+        print(f"[FightIQ] Odds API returned {len(raw)} fights with odds")
         results = []
         for event in raw:
             bookmakers = event.get("bookmakers", [])
