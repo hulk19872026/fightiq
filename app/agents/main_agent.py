@@ -166,6 +166,79 @@ def find_fighters(msg: str) -> list[str]:
     return found[:2]
 
 
+# ── Date Extraction ──
+
+_MONTH_NAMES = {
+    "jan": "January", "feb": "February", "mar": "March", "apr": "April",
+    "may": "May", "jun": "June", "jul": "July", "aug": "August",
+    "sep": "September", "oct": "October", "nov": "November", "dec": "December",
+    "january": "January", "february": "February", "march": "March",
+    "april": "April", "june": "June", "july": "July", "august": "August",
+    "september": "September", "october": "October", "november": "November",
+    "december": "December",
+}
+
+
+def _extract_date_query(message: str) -> str:
+    """Extract a date from the user's message and build a search query.
+
+    Returns a search string like 'UFC event April 17 2026 fight card'
+    or empty string if no date found.
+    """
+    msg = message.lower()
+
+    # Pattern: "april 17", "apr 17", "17 april", "4/17"
+    for pattern in [
+        r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})",
+        r"(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)",
+    ]:
+        match = re.search(pattern, msg)
+        if match:
+            groups = match.groups()
+            if groups[0].isdigit():
+                day, month_raw = groups[0], groups[1]
+            else:
+                month_raw, day = groups[0], groups[1]
+            month = _MONTH_NAMES.get(month_raw, month_raw.title())
+            return f"UFC event {month} {day} 2026 fight card"
+
+    # Pattern: "4/17" or "04/17"
+    slash_match = re.search(r"(\d{1,2})/(\d{1,2})", msg)
+    if slash_match:
+        month_num, day = int(slash_match.group(1)), slash_match.group(2)
+        months = ["", "January", "February", "March", "April", "May", "June",
+                   "July", "August", "September", "October", "November", "December"]
+        if 1 <= month_num <= 12:
+            return f"UFC event {months[month_num]} {day} 2026 fight card"
+
+    # Pattern: "UFC 328" or "UFC 330"
+    ufc_num = re.search(r"ufc\s+(\d{3})", msg)
+    if ufc_num and ufc_num.group(1) != "327":
+        return f"UFC {ufc_num.group(1)} fight card"
+
+    return ""
+
+
+def _date_matches_events(message: str, events: list[dict]) -> bool:
+    """Check if a date mentioned in the user message matches any event date."""
+    msg = message.lower()
+
+    # Extract day number and month from the message
+    day_match = re.search(r"(\d{1,2})", msg)
+    if not day_match:
+        return True  # No specific day → don't warn
+    day = day_match.group(1)
+
+    # Check each event's date string for the day number
+    for ev in events:
+        ev_date = ev.get("date", "").lower()
+        # Match day number in event date (e.g., "Sat, Apr 11" contains "11")
+        if day in re.findall(r"\d+", ev_date):
+            return True
+
+    return False
+
+
 # ── Response Formatters ──
 
 def _format_fight_card(events: list[dict]) -> str:
@@ -502,8 +575,11 @@ async def _handle_best_bets(db: AsyncSession) -> dict:
     all_betting = [a["betting"] for a in analyses if a.get("betting")]
     ranked_bets = build_best_bets_card(all_betting)
 
+    # Get event name dynamically
+    events = await fetch_events()
+    event_name = events[0].get("name", "UFC") if events else "UFC"
     lines = [
-        "🔥 **Best Bets — UFC 327**\n",
+        f"🔥 **Best Bets — {event_name}**\n",
         "---\n",
     ]
 
@@ -535,8 +611,19 @@ async def process_chat(message: str, db: AsyncSession) -> dict:
 
     # ─── Fight Card ───
     if intent == "fights":
-        events = await fetch_events()
+        # Check if user is asking about a specific date
+        date_query = _extract_date_query(message)
+        events = await fetch_events(query=date_query)
         text = _format_fight_card(events)
+        if date_query:
+            # Check if the date the user asked about matches any event
+            date_match = _date_matches_events(message, events)
+            if not date_match:
+                text += (
+                    "\n\n_I don't have specific data for that date yet. "
+                    "Showing the next available card. "
+                    "Event data updates automatically when available._"
+                )
         return {"intent": intent, "response": text, "data": events}
 
     # ─── Parlay Builder ───

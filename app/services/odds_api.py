@@ -16,26 +16,30 @@ def american_to_implied(odds: int) -> int:
 
 # ── Events (fight card) ──
 
-async def fetch_events() -> list[dict]:
-    cached = cache_get("events_live", ttl=600)
-    if cached:
-        return cached
+async def fetch_events(query: str = "") -> list[dict]:
+    # Date-specific queries bypass the cache so we search fresh
+    if not query:
+        cached = cache_get("events_live", ttl=600)
+        if cached:
+            return cached
 
     # Try The Odds API for live event data
-    if API_KEY:
+    if API_KEY and not query:
         events = await _fetch_events_from_odds_api()
         if events:
             cache_set("events_live", events)
             return events
 
-    # Try web search
-    events = await _fetch_events_from_web()
+    # Try web search (with custom query if provided)
+    events = await _fetch_events_from_web(query)
     if events:
-        cache_set("events_live", events)
+        if not query:
+            cache_set("events_live", events)
         return events
 
     # Fallback
-    cache_set("events_live", FALLBACK_EVENTS)
+    if not query:
+        cache_set("events_live", FALLBACK_EVENTS)
     return FALLBACK_EVENTS
 
 
@@ -81,14 +85,15 @@ async def _fetch_events_from_odds_api() -> list[dict]:
         return []
 
 
-async def _fetch_events_from_web() -> list[dict]:
-    """Search the web for the next UFC event."""
+async def _fetch_events_from_web(query: str = "") -> list[dict]:
+    """Search the web for UFC events. Uses custom query if provided."""
+    search_query = query or "UFC fight card schedule 2026 site:ufc.com OR site:espn.com"
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
             resp = await client.post(
                 "https://html.duckduckgo.com/html/",
-                data={"q": "next UFC event fight card 2026"},
-                headers={"User-Agent": "Mozilla/5.0 (compatible; FightIQ/1.0)"},
+                data={"q": search_query},
+                headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
             )
             resp.raise_for_status()
 
@@ -100,18 +105,29 @@ async def _fetch_events_from_web() -> list[dict]:
         name_match = re.search(r"(UFC\s+\d{3}[^.,:]{0,40})", text)
         event_name = name_match.group(1).strip() if name_match else "Upcoming UFC Event"
 
-        # Extract fighter matchups
+        # Extract fighter matchups — broader patterns to catch more names
         fights = []
-        for match in re.finditer(r"([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s+vs\.?\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)", text):
-            a, b = match.group(1).strip(), match.group(2).strip()
-            if 2 < len(a) < 30 and 2 < len(b) < 30:
+        seen = set()
+        patterns = [
+            r"([A-Z][a-z]+(?:[-'\s][A-Z][a-z]+){0,3})\s+vs\.?\s+([A-Z][a-z]+(?:[-'\s][A-Z][a-z]+){0,3})",
+            r"([A-Z][a-z]{2,}(?:\s[A-Z][a-z]{2,})?)\s+(?:versus|v\.?s?\.?|against)\s+([A-Z][a-z]{2,}(?:\s[A-Z][a-z]{2,})?)",
+        ]
+        for pat in patterns:
+            for match in re.finditer(pat, text):
+                a, b = match.group(1).strip(), match.group(2).strip()
+                key = f"{a.lower()}|{b.lower()}"
+                if key in seen or 2 >= len(a) or len(a) >= 30 or 2 >= len(b) or len(b) >= 30:
+                    continue
+                seen.add(key)
                 fights.append({
                     "fighter_a": a,
                     "fighter_b": b,
                     "weight_class": "",
                     "is_main_event": len(fights) == 0,
                 })
-            if len(fights) >= 8:
+                if len(fights) >= 12:
+                    break
+            if len(fights) >= 12:
                 break
 
         if fights:
