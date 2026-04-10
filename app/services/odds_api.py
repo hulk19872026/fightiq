@@ -71,6 +71,54 @@ def _filter_events_by_query(events: list[dict], query: str) -> list[dict]:
     return filtered
 
 
+def _is_ufc_event(evt: dict) -> bool:
+    """Determine if an API event is a UFC fight (not regional MMA, BKFC, etc.)."""
+    # Check all text fields for "UFC"
+    for field in ("description", "sport_title", "id"):
+        val = (evt.get(field) or "")
+        if "ufc" in val.lower():
+            return True
+
+    # Check by known UFC fighter names (last names)
+    home = (evt.get("home_team") or "").lower()
+    away = (evt.get("away_team") or "").lower()
+    home_last = home.split()[-1] if home else ""
+    away_last = away.split()[-1] if away else ""
+    for name in (home_last, away_last):
+        if name in _KNOWN_UFC_FIGHTERS:
+            return True
+
+    return False
+
+
+# Known UFC fighter last names — used to identify UFC events when the API
+# doesn't include a description field. Kept broad to catch most cards.
+_KNOWN_UFC_FIGHTERS = {
+    # UFC 327 card (seeded)
+    "prochazka", "ulberg", "murzakanov", "costa", "blaydes", "hokit",
+    "reyes", "walker", "swanson", "landwehr", "pitbull", "pico",
+    "holland", "brown", "gamrot", "ribovics",
+    # Common UFC fighters
+    "adesanya", "pereira", "strickland", "du plessis", "dvalishvili",
+    "nurmagomedov", "volkanovski", "topuria", "makhachev", "oliveira",
+    "poirier", "gaethje", "chandler", "mcgregor", "diaz", "covington",
+    "edwards", "usman", "chimaev", "burns", "luque", "thompson",
+    "jones", "aspinall", "miocic", "tuivasa", "gane", "lewis",
+    "ankalaev", "hill", "rakic", "smith", "craig", "santos",
+    "whittaker", "imavov", "cannonier", "brunson", "vettori",
+    "gastelum", "nascimento", "romanov", "sherman", "dariush",
+    "tsarukyan", "holloway", "allen", "emmett", "kattar", "yair",
+    "moreno", "pantoja", "royval", "figueiredo", "kara-france",
+    "shevchenko", "grasso", "fiorot", "namajunas", "zhang",
+    "nunes", "pena", "aldana", "holm", "lemos", "andrade",
+    "o'malley", "yan", "sandhagen", "font", "aldo", "cruz",
+    "sterling", "dillashaw", "garbrandt", "barboza", "mitchell",
+    "dober", "cerrone", "perry", "masvidal", "colby", "wonderboy",
+    "nakatani", "perreira", "poppeck", "narkun",
+    # Add more as needed
+}
+
+
 async def _fetch_events_from_odds_api() -> list[dict]:
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
@@ -85,21 +133,19 @@ async def _fetch_events_from_odds_api() -> list[dict]:
         if not raw:
             return []
 
-        # Filter to UFC-only events.
-        # The Odds API "description" field often contains "UFC" for UFC events.
-        # We also accept events where home_team/away_team are known UFC fighters.
-        ufc_fights = []
-        for evt in raw:
-            desc = (evt.get("description") or "").lower()
-            title = (evt.get("sport_title") or "").lower()
-            # Accept if description mentions UFC, or if the event ID hints at UFC
-            if "ufc" in desc or "ufc" in title or "ufc" in evt.get("id", ""):
-                ufc_fights.append(evt)
-        print(f"[FightIQ] Filtered to {len(ufc_fights)} UFC fights")
+        # Log a sample event so we can see available fields
+        if raw:
+            sample = raw[0]
+            print(f"[FightIQ] Sample event fields: {list(sample.keys())}")
+            print(f"[FightIQ] Sample: desc={sample.get('description')!r} "
+                  f"home={sample.get('home_team')!r} away={sample.get('away_team')!r}")
+
+        # Filter to UFC-only events
+        ufc_fights = [evt for evt in raw if _is_ufc_event(evt)]
+        print(f"[FightIQ] Filtered to {len(ufc_fights)} UFC fights (from {len(raw)} total)")
 
         if not ufc_fights:
-            # Fallback: if no UFC tag found, the API might not include descriptions.
-            # Use all fights but cap per card to avoid flooding with regional events.
+            print("[FightIQ] WARNING: No UFC fights identified, using all events")
             ufc_fights = raw
 
         # Group fights by commence_time (events on the same day = same card)
@@ -108,7 +154,7 @@ async def _fetch_events_from_odds_api() -> list[dict]:
         for evt in ufc_fights:
             date = evt.get("commence_time", "")[:10]  # YYYY-MM-DD
             cards[date].append(evt)
-        print(f"[FightIQ] Events grouped into {len(cards)} cards: {list(cards.keys())}")
+        print(f"[FightIQ] UFC events grouped into {len(cards)} cards: {list(cards.keys())}")
 
         events = []
         for date, fights in sorted(cards.items()):
@@ -121,7 +167,7 @@ async def _fetch_events_from_odds_api() -> list[dict]:
                 "location": "TBD",
                 "fights": [],
             }
-            for i, f in enumerate(fights[:15]):  # Cap at 15 fights per card
+            for i, f in enumerate(fights[:15]):
                 event["fights"].append({
                     "fighter_a": f.get("home_team", "TBD"),
                     "fighter_b": f.get("away_team", "TBD"),
@@ -130,7 +176,7 @@ async def _fetch_events_from_odds_api() -> list[dict]:
                 })
             events.append(event)
 
-        return events[:3]  # Next 3 UFC events max
+        return events[:3]
     except Exception as e:
         print(f"[FightIQ] Events API error: {e}")
         return []
@@ -246,15 +292,9 @@ async def _fetch_odds_from_api() -> list[dict]:
         print(f"[FightIQ] Odds API returned {len(raw)} total fights with odds")
 
         # Filter to UFC-only
-        ufc_events = [
-            e for e in raw
-            if "ufc" in (e.get("description") or "").lower()
-            or "ufc" in (e.get("sport_title") or "").lower()
-            or "ufc" in e.get("id", "")
-        ]
-        # Fall back to all if no UFC tag found
+        ufc_events = [e for e in raw if _is_ufc_event(e)]
         events_to_parse = ufc_events if ufc_events else raw
-        print(f"[FightIQ] Filtered to {len(events_to_parse)} UFC fights with odds")
+        print(f"[FightIQ] Filtered to {len(events_to_parse)} UFC fights with odds (from {len(raw)} total)")
 
         results = []
         for event in events_to_parse:

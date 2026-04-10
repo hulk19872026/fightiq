@@ -58,7 +58,6 @@ async def debug_api_status():
     events = await fetch_events()
     odds = await fetch_odds()
 
-    # Check if data came from API or fallback
     events_source = "fallback"
     if events and events[0].get("date", "") not in ("Sat, Apr 11 – 9 PM ET",):
         events_source = "live_api_or_web"
@@ -74,6 +73,38 @@ async def debug_api_status():
         "odds_count": len(odds),
         "cache_keys": list(_store.keys()),
     }
+
+
+@app.get("/debug/raw-api")
+async def debug_raw_api():
+    """Dump raw Odds API response to see actual field values."""
+    import os
+    import httpx
+
+    key = os.getenv("ODDS_API_KEY", "")
+    if not key:
+        return {"error": "ODDS_API_KEY not set"}
+
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            resp = await client.get(
+                "https://api.the-odds-api.com/v4/sports/mma_mixed_martial_arts/events",
+                params={"apiKey": key},
+            )
+        raw = resp.json()
+        # Show first 5 events with ALL fields so we can see what's available
+        return {
+            "status": resp.status_code,
+            "total_events": len(raw) if isinstance(raw, list) else "not_a_list",
+            "sample_events": raw[:5] if isinstance(raw, list) else raw,
+            "all_fields": list(raw[0].keys()) if isinstance(raw, list) and raw else [],
+            "descriptions": [
+                {"home": e.get("home_team"), "away": e.get("away_team"), "desc": e.get("description"), "id": e.get("id", "")[:30]}
+                for e in (raw[:15] if isinstance(raw, list) else [])
+            ],
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # Serve React frontend
