@@ -87,73 +87,148 @@ def analyze_betting(fighter_a: dict, fighter_b: dict, odds: dict | None, predict
     }
 
 
-def build_parlay(picks: list[dict], num_legs: int = 3) -> dict:
-    """Build a parlay from a list of analyzed fight picks, sorted by confidence.
+# ── Elite Parlay Engine ──────────────────────────────────────────────
 
-    Deduplicates by fighter so each leg is a different fight.
+
+def _pick_edge(pick: dict) -> float:
+    """Calculate edge: model confidence minus market implied probability."""
+    conf = pick.get("confidence", 50)
+    odds_val = pick.get("winner_odds", -150)
+    market_prob = american_to_implied(odds_val)
+    return conf - market_prob
+
+
+def _pick_ev(pick: dict) -> float:
+    """Expected value per $100 wagered."""
+    conf = pick.get("confidence", 50) / 100.0
+    odds_val = pick.get("winner_odds", -150)
+    if odds_val > 0:
+        payout = odds_val / 100.0
+    else:
+        payout = 100.0 / abs(odds_val)
+    return round((conf * payout - (1 - conf)) * 100, 1)
+
+
+def _style_tag(pick: dict) -> str:
+    method = pick.get("method", "")
+    if "KO" in method or "TKO" in method:
+        return "Striker"
+    if "Submission" in method:
+        return "Grappler"
+    return "Tactician"
+
+
+def _select_legs(picks: list[dict], num_legs: int, *, sort_key: str) -> list[dict]:
+    """Select num_legs unique-fight picks sorted by sort_key.
+
+    sort_key: 'confidence' (safe), 'edge' (balanced), 'payout' (risky)
     """
-    sorted_picks = sorted(picks, key=lambda p: p["confidence"], reverse=True)
+    if sort_key == "edge":
+        ordered = sorted(picks, key=lambda p: _pick_edge(p), reverse=True)
+    elif sort_key == "payout":
+        # Prefer underdogs (positive odds first, then by magnitude)
+        ordered = sorted(picks, key=lambda p: p.get("winner_odds", -150), reverse=True)
+    else:
+        ordered = sorted(picks, key=lambda p: p["confidence"], reverse=True)
 
     legs = []
-    used_fighters: set[str] = set()
-    parlay_prob = 1.0
-    combined_american = 100
-
-    for pick in sorted_picks:
+    used: set[str] = set()
+    for pick in ordered:
         if len(legs) >= num_legs:
             break
-
         winner = pick["predicted_winner"]
-        # Skip if this fighter is already in the parlay
-        if winner.lower() in used_fighters:
+        if winner.lower() in used:
             continue
-
-        conf = pick["confidence"]
-        method = pick["method"]
-        odds_val = pick.get("winner_odds", -150)
-
-        leg = {
-            "fighter": winner,
-            "method": method,
-            "confidence": conf,
-            "odds": f"{'+' if odds_val > 0 else ''}{odds_val}",
-            "reasoning": pick.get("reasoning", ""),
-        }
-        legs.append(leg)
-        used_fighters.add(winner.lower())
-        # Also mark the opponent so we don't pick the same fight twice
+        legs.append(pick)
+        used.add(winner.lower())
         for key in ("fighter_a", "fighter_b"):
             if key in pick:
-                used_fighters.add(pick[key].lower())
+                used.add(pick[key].lower())
+    return legs
 
+
+def _build_single_parlay(legs: list[dict]) -> dict:
+    """Compute combined odds, probability, EV, payout for a set of legs."""
+    parlay_prob = 1.0
+    for pick in legs:
+        odds_val = pick.get("winner_odds", -150)
         implied = american_to_implied(odds_val) / 100.0
         parlay_prob *= implied
 
-    # Calculate parlay odds from combined probability
-    if parlay_prob > 0 and parlay_prob < 1:
+    if 0 < parlay_prob < 1:
         if parlay_prob > 0.5:
             combined_american = -round(parlay_prob / (1 - parlay_prob) * 100)
         else:
             combined_american = round((1 - parlay_prob) / parlay_prob * 100)
+    else:
+        combined_american = 100
 
-    # Risk assessment
-    if parlay_prob > 0.35:
+    payout_100 = round(100 * (1 / parlay_prob - 1)) if parlay_prob > 0 else 0
+
+    # AI win probability uses model confidence instead of market implied
+    ai_prob = 1.0
+    for pick in legs:
+        ai_prob *= pick["confidence"] / 100.0
+
+    # EV = (ai_win_prob * payout) - (ai_loss_prob * stake)
+    ev_raw = ai_prob * payout_100 - (1 - ai_prob) * 100
+    ev_label = "Positive" if ev_raw > 0 else "Negative"
+
+    if ai_prob > 0.35:
+        risk = "Low"
+    elif ai_prob > 0.20:
         risk = "Medium"
-    elif parlay_prob > 0.20:
+    elif ai_prob > 0.10:
         risk = "High"
     else:
         risk = "Very High"
 
-    payout_100 = round(100 * (1 / parlay_prob - 1)) if parlay_prob > 0 else 0
+    formatted_legs = []
+    for pick in legs:
+        odds_val = pick.get("winner_odds", -150)
+        formatted_legs.append({
+            "fighter": pick["predicted_winner"],
+            "method": pick["method"],
+            "confidence": pick["confidence"],
+            "odds": f"{'+' if odds_val > 0 else ''}{odds_val}",
+            "edge": f"{'+' if _pick_edge(pick) > 0 else ''}{round(_pick_edge(pick))}%",
+            "ev": _pick_ev(pick),
+            "style": _style_tag(pick),
+            "reasoning": pick.get("reasoning", ""),
+            "fighter_a": pick.get("fighter_a", ""),
+            "fighter_b": pick.get("fighter_b", ""),
+        })
 
     return {
         "type": "parlay",
-        "legs": legs,
-        "num_legs": len(legs),
+        "legs": formatted_legs,
+        "num_legs": len(formatted_legs),
         "combined_odds": f"{'+' if combined_american > 0 else ''}{combined_american}",
         "implied_probability": f"{round(parlay_prob * 100)}%",
+        "ai_win_probability": f"{round(ai_prob * 100)}%",
+        "ev": f"{'+'  if ev_raw > 0 else ''}{round(ev_raw)}",
+        "ev_label": ev_label,
         "payout_per_100": f"${payout_100}",
         "risk": risk,
+    }
+
+
+def build_parlay(picks: list[dict], num_legs: int = 3) -> dict:
+    """Build a single parlay from picks, sorted by confidence."""
+    legs = _select_legs(picks, num_legs, sort_key="confidence")
+    return _build_single_parlay(legs)
+
+
+def build_elite_parlays(picks: list[dict], num_legs: int = 3) -> dict:
+    """Generate three parlay tiers: safe, balanced, risky."""
+    safe_legs = _select_legs(picks, num_legs, sort_key="confidence")
+    balanced_legs = _select_legs(picks, num_legs, sort_key="edge")
+    risky_legs = _select_legs(picks, num_legs, sort_key="payout")
+
+    return {
+        "safe": _build_single_parlay(safe_legs),
+        "balanced": _build_single_parlay(balanced_legs),
+        "risky": _build_single_parlay(risky_legs),
     }
 
 

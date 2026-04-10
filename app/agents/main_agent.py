@@ -3,7 +3,7 @@ import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.stats_agent import get_fighter_stats, compare_fighters
 from app.agents.research_agent import analyze_matchup
-from app.agents.betting_agent import analyze_betting, build_parlay, build_best_bets_card
+from app.agents.betting_agent import analyze_betting, build_parlay, build_elite_parlays, build_best_bets_card
 from app.services.odds_api import fetch_odds
 from app.services.espn import fetch_events
 from app.services.search import search_fighter_stats, search_fight_info
@@ -370,26 +370,20 @@ async def _analyze_all_fights(db: AsyncSession) -> list[dict]:
     return results
 
 
-async def _handle_parlay(num_legs: int, db: AsyncSession) -> dict:
-    """Build a parlay with the specified number of legs.
-
-    Guarantees the requested number of legs by supplementing from fallback
-    odds data when live analysis doesn't produce enough picks.
-    """
+def _guarantee_picks(analyses: list[dict], num_needed: int) -> list[dict]:
+    """Ensure we have at least num_needed picks by supplementing from fallback."""
     from app.services.odds_api import FALLBACK_ODDS
 
-    analyses = await _analyze_all_fights(db)
+    if len(analyses) >= num_needed:
+        return analyses
 
-    # ── Guarantee enough picks ──────────────────────────────────────
-    # Track every fighter already represented (both sides of each fight)
     covered: set[str] = set()
     for a in analyses:
         covered.add(a.get("fighter_a", "").split()[-1].lower())
         covered.add(a.get("fighter_b", "").split()[-1].lower())
 
-    # Fill remaining slots from fallback odds
     for odds_entry in FALLBACK_ODDS:
-        if len(analyses) >= num_legs:
+        if len(analyses) >= num_needed:
             break
         last_a = odds_entry["fighter_a"].split()[-1].lower()
         last_b = odds_entry["fighter_b"].split()[-1].lower()
@@ -400,7 +394,34 @@ async def _handle_parlay(num_legs: int, db: AsyncSession) -> dict:
             covered.add(last_a)
             covered.add(last_b)
 
-    # ── Validate ────────────────────────────────────────────────────
+    return analyses
+
+
+def _format_parlay_tier(label: str, emoji: str, parlay: dict) -> list[str]:
+    """Format a single parlay tier into markdown lines."""
+    lines = [f"{emoji} **{label}**\n"]
+    for i, leg in enumerate(parlay["legs"], 1):
+        conf = leg["confidence"]
+        conf_emoji = "🟢" if conf > 65 else "🟡" if conf > 55 else "🔴"
+        style_emoji = "🥊" if leg.get("style") == "Striker" else "🤼" if leg.get("style") == "Grappler" else "🧠"
+        lines.append(f"**Leg {i}:** {conf_emoji} **{leg['fighter']}** ({leg['odds']}) {style_emoji}")
+        lines.append(f"  {leg['method']} — {conf}% confidence | Edge: {leg.get('edge', 'N/A')}")
+        if leg.get("reasoning"):
+            lines.append(f"  _{leg['reasoning']}_")
+        lines.append("")
+
+    risk_emoji = "🟢" if parlay["risk"] == "Low" else "🟡" if parlay["risk"] in ("Medium", "High") else "🔴"
+    lines.append(f"💰 **Odds:** {parlay['combined_odds']}  |  📊 **Win Chance:** {parlay.get('ai_win_probability', parlay['implied_probability'])}")
+    lines.append(f"💵 **$100 Payout:** {parlay['payout_per_100']}  |  🧠 **EV:** {parlay.get('ev', 'N/A')}")
+    lines.append(f"⚠️ **Risk:** {risk_emoji} {parlay['risk']}")
+    return lines
+
+
+async def _handle_parlay(num_legs: int, db: AsyncSession) -> dict:
+    """Build an elite parlay with safe/balanced/risky tiers."""
+    analyses = await _analyze_all_fights(db)
+    analyses = _guarantee_picks(analyses, max(num_legs, 5))
+
     if not analyses:
         return {"intent": "parlay", "response": "Couldn't analyze fights for parlay.", "data": None}
 
@@ -412,32 +433,36 @@ async def _handle_parlay(num_legs: int, db: AsyncSession) -> dict:
             "data": None,
         }
 
-    # ── Build ───────────────────────────────────────────────────────
-    parlay = build_parlay(analyses, num_legs)
+    # Generate all three tiers
+    tiers = build_elite_parlays(analyses, num_legs)
 
-    lines = [
-        f"🎰 **{parlay['num_legs']}-Leg Parlay**\n",
-        "---\n",
-    ]
+    lines = [f"🎯 **{num_legs}-Leg Parlay — 3 Strategies**\n"]
 
-    for i, leg in enumerate(parlay["legs"], 1):
-        conf = leg["confidence"]
-        emoji = "🟢" if conf > 65 else "🟡" if conf > 55 else "🔴"
-        lines.append(f"**Leg {i}:** {emoji} **{leg['fighter']}** ({leg['odds']})")
-        lines.append(f"  By {leg['method']} — {conf}% confidence")
-        if leg.get("reasoning"):
-            lines.append(f"  _{leg['reasoning']}_\n")
-
+    # ── Lock pick (highest confidence single pick)
+    best = max(analyses, key=lambda p: p["confidence"])
+    best_odds = best.get("winner_odds", -150)
+    lines.append(
+        f"🔒 **Lock of the Night:** {best['predicted_winner']} "
+        f"({'+' if best_odds > 0 else ''}{best_odds}) — "
+        f"{best['confidence']}% confidence\n"
+    )
     lines.append("---\n")
-    lines.append(f"💰 **Combined Odds:** {parlay['combined_odds']}")
-    lines.append(f"📊 **Implied Probability:** {parlay['implied_probability']}")
-    lines.append(f"💵 **$100 Payout:** {parlay['payout_per_100']}")
 
-    risk_emoji = "🟢" if parlay["risk"] == "Medium" else "🟡" if parlay["risk"] == "High" else "🔴"
-    lines.append(f"⚠️ **Risk:** {risk_emoji} {parlay['risk']}")
-    lines.append("\n_This is not financial advice._")
+    # ── Safe parlay
+    lines.extend(_format_parlay_tier(f"SAFE PARLAY ({num_legs} Legs)", "🟢", tiers["safe"]))
+    lines.append("\n---\n")
 
-    return {"intent": "parlay", "response": "\n".join(lines), "data": parlay}
+    # ── Balanced parlay
+    lines.extend(_format_parlay_tier(f"BALANCED PARLAY ({num_legs} Legs)", "🟡", tiers["balanced"]))
+    lines.append("\n---\n")
+
+    # ── Risky parlay
+    lines.extend(_format_parlay_tier(f"RISKY PARLAY ({num_legs} Legs)", "🔴", tiers["risky"]))
+
+    lines.append("\n---\n")
+    lines.append("_This is not financial advice._")
+
+    return {"intent": "parlay", "response": "\n".join(lines), "data": tiers}
 
 
 async def _handle_best_bets(db: AsyncSession) -> dict:
